@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import structlog
 
 from database import connect_db, close_db
-from routers import campaigns, growers, analytics, weather, content
+from routers import campaigns, growers, analytics, weather, content, system
 
 logger = structlog.get_logger()
 
@@ -47,6 +47,7 @@ app.include_router(growers.router, prefix="/api/growers", tags=["Growers"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])
 app.include_router(content.router, prefix="/api/content", tags=["Content Generation"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
 
 
 @app.get("/", tags=["Health"])

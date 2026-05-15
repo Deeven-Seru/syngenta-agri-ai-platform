@@ -17,3 +17,4 @@ structlog
 tenacity
 geopy
 python-multipart
+psutil
