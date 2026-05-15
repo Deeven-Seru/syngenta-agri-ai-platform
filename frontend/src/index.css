@@ -51,6 +51,7 @@
   --t-slow: 380ms cubic-bezier(0.25, 0, 0, 1);
 }
 
+/* ... existing styles ... */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #root {
@@ -63,12 +64,10 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-med); border-radius: 99px; }
 
-/* ── Layout ── */
 .app-layout {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
@@ -76,7 +75,6 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* ── Sidebar ── */
 .sidebar {
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
@@ -181,7 +179,6 @@ html, body, #root {
   margin: 10px 10px;
 }
 
-/* Status footer */
 .sidebar-status {
   padding: 14px 18px;
   border-top: 1px solid var(--border);
@@ -217,7 +214,6 @@ html, body, #root {
   100% { box-shadow: 0 0 0 0 rgba(64,145,108,0); }
 }
 
-/* ── Main ── */
 .main-content {
   overflow-y: auto;
   background: var(--bg-base);
@@ -225,7 +221,6 @@ html, body, #root {
   flex-direction: column;
 }
 
-/* Page structure */
 .page-header {
   padding: 26px 32px 22px;
   border-bottom: 1px solid var(--border);
@@ -253,7 +248,6 @@ html, body, #root {
   flex: 1;
 }
 
-/* ── Cards ── */
 .card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -262,8 +256,6 @@ html, body, #root {
 }
 
 .card:hover { border-color: var(--border-med); }
-
-.card-pad { padding: 20px; }
 
 .card-head {
   display: flex;
@@ -286,7 +278,6 @@ html, body, #root {
 
 .card-label svg { color: var(--text-4); }
 
-/* ── KPI Grid ── */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -363,16 +354,11 @@ html, body, #root {
 .kpi-sub.amber { color: var(--amber-hi); }
 .kpi-sub.muted { color: var(--text-3); }
 
-/* ── Grids ── */
 .grid-2   { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3   { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 .grid-7-5 { display: grid; grid-template-columns: 7fr 5fr; gap: 16px; }
 .grid-6-6 { display: grid; grid-template-columns: 6fr 6fr; gap: 16px; }
 
-/* ── Charts ── */
-.chart-wrap { width: 100%; height: 220px; }
-
-/* ── Tables ── */
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -404,7 +390,6 @@ html, body, #root {
 
 .data-table tbody tr:hover td { background: var(--bg-hover); }
 
-/* ── Badges ── */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -422,7 +407,6 @@ html, body, #root {
 .badge-blue   { background: rgba(58,107,138,0.12);  color: var(--blue-hi);  border: 1px solid rgba(58,107,138,0.25); }
 .badge-muted  { background: rgba(255,255,255,0.05); color: var(--text-3);   border: 1px solid var(--border); }
 
-/* ── Progress ── */
 .prog-bar {
   height: 4px;
   background: var(--border);
@@ -439,7 +423,6 @@ html, body, #root {
 
 .prog-fill.amber { background: linear-gradient(90deg, var(--amber), var(--amber-hi)); }
 
-/* ── Buttons ── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -492,7 +475,6 @@ html, body, #root {
 
 .btn-sm { padding: 6px 13px; font-size: 12px; }
 
-/* ── Form elements ── */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -543,7 +525,6 @@ html, body, #root {
   min-height: 90px;
 }
 
-/* ── Spinner ── */
 .spinner {
   width: 16px;
   height: 16px;
@@ -555,7 +536,6 @@ html, body, #root {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Skeleton loaders ── */
 .skeleton {
   background: linear-gradient(90deg, var(--bg-panel) 25%, var(--bg-hover) 50%, var(--bg-panel) 75%);
   background-size: 200% 100%;
@@ -568,7 +548,6 @@ html, body, #root {
   100% { background-position: -200% 0; }
 }
 
-/* ── WhatsApp message preview ── */
 .wa-preview {
   background: var(--bg-surface);
   border: 1px solid var(--border-med);
@@ -604,15 +583,12 @@ html, body, #root {
   font-style: italic;
 }
 
-/* ── Tier pills ── */
 .tier-high   { background: rgba(64,145,108,0.12); color: var(--green-hi); border: 1px solid rgba(64,145,108,0.25); padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; }
 .tier-medium { background: rgba(181,131,58,0.12);  color: var(--amber-hi); border: 1px solid rgba(181,131,58,0.25); padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; }
 .tier-low    { background: rgba(255,255,255,0.04); color: var(--text-3);   border: 1px solid var(--border);         padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; }
 
-/* ── Divider ── */
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
 
-/* ── Utils ── */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
@@ -642,7 +618,6 @@ html, body, #root {
 .text-sm { font-size: 12px; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── Page transitions ── */
 .page-enter {
   animation: page-in 0.22s var(--t-slow) both;
 }
@@ -652,7 +627,6 @@ html, body, #root {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Tooltip (custom Recharts) ── */
 .custom-tooltip {
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
@@ -685,7 +659,6 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-/* ── Empty state ── */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -700,7 +673,6 @@ html, body, #root {
 .empty-state svg { color: var(--text-4); opacity: 0.7; }
 .empty-state p { font-size: 13px; }
 
-/* ── Loading full page ── */
 .loading-page {
   display: flex;
   flex-direction: column;
@@ -709,4 +681,37 @@ html, body, #root {
   height: 100%;
   gap: 14px;
   color: var(--text-3);
+}
+
+/* Map Styling */
+.map-overlay-legend {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: var(--bg-card, #0c1210);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: 8px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+}
+
+.map-popup {
+  font-family: 'Inter', sans-serif;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0c1210 !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  border-radius: 8px !important;
+}
+
+.leaflet-popup-tip {
+  background: #0c1210 !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
 }
