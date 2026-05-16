@@ -10,7 +10,8 @@ import uuid
 
 from database import col_weather_history, col_autonomous_campaigns, col_growers, col_model_scores, col_campaigns
 from services.weather_service import get_bulk_district_weather, DISTRICT_COORDS
-from routers.campaigns import dispatch_twilio_messages
+from services.campaign_service import dispatch_twilio_messages
+from services.receptivity_service import score_growers
 from config import get_settings
 
 logger = structlog.get_logger()
@@ -112,27 +113,25 @@ async def scan_for_anomalies():
     if history_docs:
         await col_weather_history().insert_many(history_docs)
 
-    # Re-iterate to check anomalies after logging history
-    for district, data in weather_map.items():
-        if "error" in data:
-            continue
-        
-        # Check for Frost (Immediate)
-        if data.get("temperature_c") is not None and data.get("temperature_c") < THRESHOLDS["FROST_TEMP"]:
-            await trigger_autonomous_campaign(district, "Frost Warning", data)
-            continue
-            
-        # Check for Pest Risk (48h lookback)
-        if await check_pest_anomaly(district, data):
-            await trigger_autonomous_campaign(district, "Pest Alert", data)
-            continue
-            
-        # Check for Heat Stress (3 days lookback)
-        if await check_heat_anomaly(district, data):
-            await trigger_autonomous_campaign(district, "Heat Stress", data)
-            continue
+    # Check anomalies for all districts concurrently
+    tasks = [process_district_anomalies(district, data) for district, data in weather_map.items() if "error" not in data]
+    await asyncio.gather(*tasks)
 
     logger.info("✅ Weather Watcher scan complete.")
+
+async def process_district_anomalies(district: str, data: dict):
+    """Check all anomalies for a single district without masking."""
+    # Check for Frost (Immediate)
+    if data.get("temperature_c") is not None and data.get("temperature_c") < THRESHOLDS["FROST_TEMP"]:
+        await trigger_autonomous_campaign(district, "Frost Warning", data)
+        
+    # Check for Pest Risk (48h lookback)
+    if await check_pest_anomaly(district, data):
+        await trigger_autonomous_campaign(district, "Pest Alert", data)
+        
+    # Check for Heat Stress (3 days lookback)
+    if await check_heat_anomaly(district, data):
+        await trigger_autonomous_campaign(district, "Heat Stress", data)
 
 async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_data: dict):
     """
@@ -201,28 +200,27 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     }
     await col_autonomous_campaigns().insert_one(auto_doc)
 
-    # 3. Prepare targets and dispatch (reuse existing logic)
-    # Stream growers to col_model_scores in batches
+    # 3. Prepare targets and dispatch (Reuse AI Scoring)
+    # Stream growers to score them with the actual model
     growers_cursor = col_growers().find({"district": district})
     
-    score_docs_batch = []
-    async for g in growers_cursor:
-        score_docs_batch.append({
-            "campaign_id": campaign_id,
-            "grower_id": g["_id"],
-            "receptivity_score": 1.0, 
-            "receptivity_tier": "high",
-            "device_type": g.get("device_type", "smartphone"),
-            "language": g.get("language", "Hindi"),
-            "district": district
-        })
-        
-        if len(score_docs_batch) >= 1000:
-            await col_model_scores().insert_many(score_docs_batch)
-            score_docs_batch = []
-            
-    if score_docs_batch:
-        await col_model_scores().insert_many(score_docs_batch)
+    # We fetch all to score them
+    all_growers = await growers_cursor.to_list(length=grower_count)
+    scored_growers = score_growers(all_growers, product, crop)
+    
+    score_docs = [{
+        "campaign_id": campaign_id,
+        "grower_id": g["_id"],
+        "receptivity_score": g["receptivity_score"], 
+        "receptivity_tier": g["receptivity_tier"],
+        "device_type": g.get("device_type", "smartphone"),
+        "language": g.get("language", "Hindi"),
+        "district": district
+    } for g in scored_growers]
+    
+    # Batch insert scores
+    for i in range(0, len(score_docs), 1000):
+        await col_model_scores().insert_many(score_docs[i:i+1000])
 
     settings = get_settings()
     # Offload to background
