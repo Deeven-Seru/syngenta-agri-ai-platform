@@ -1,9 +1,8 @@
 """
 Autonomous Campaign Router — Triggered by Weather Watcher
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from typing import Optional
-from datetime import datetime, timezone
 import structlog
 
 from database import col_autonomous_campaigns, col_weather_history
@@ -28,7 +27,7 @@ async def list_autonomous_campaigns(limit: int = 20):
     cursor = col_autonomous_campaigns().find({}, sort=[("triggered_at", -1)]).limit(limit)
     campaigns = await cursor.to_list(length=limit)
     for c in campaigns:
-        c["id"] = c.pop("_id")
+        c["id"] = str(c.pop("_id"))
     return {"campaigns": campaigns, "count": len(campaigns)}
 
 @router.get("/weather-history")

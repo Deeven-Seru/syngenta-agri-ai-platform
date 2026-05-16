@@ -8,9 +8,8 @@ from datetime import datetime, timezone, timedelta
 import structlog
 import uuid
 
-from database import col_weather_history, col_autonomous_campaigns, col_growers
+from database import col_weather_history, col_autonomous_campaigns, col_growers, col_model_scores, col_campaigns
 from services.weather_service import get_bulk_district_weather, DISTRICT_COORDS
-from services.content_generator import generate_whatsapp_message, generate_voice_script
 from routers.campaigns import dispatch_twilio_messages
 from config import get_settings
 
@@ -24,6 +23,48 @@ THRESHOLDS = {
     "HEAT_STRESS_TEMP": 42.0, # °C
     "FROST_TEMP": 4.0,        # °C
 }
+
+async def check_pest_anomaly(district: str, current_data: dict) -> bool:
+    """Check if Pest Alert criteria met consistently over last 48 hours."""
+    now = datetime.now(timezone.utc)
+    lookback = now - timedelta(hours=48)
+    
+    # Criteria: Humidity > 85 and Temp 20-30
+    if not (current_data.get("humidity_pct", 0) > THRESHOLDS["PEST_HUMIDITY"] and 
+            THRESHOLDS["PEST_TEMP_MIN"] <= current_data.get("temperature_c", 0) <= THRESHOLDS["PEST_TEMP_MAX"]):
+        return False
+        
+    # Check history: Are there any breaches of the condition in the last 48h?
+    # For demo/hackathon, we'll check if there's at least one record from ~48h ago that also meets it,
+    # or just that NO record in history fails it.
+    history_cursor = col_weather_history().find({
+        "district": district,
+        "timestamp": {"$gte": lookback},
+        "$or": [
+            {"humidity": {"$lte": THRESHOLDS["PEST_HUMIDITY"]}},
+            {"temp": {"$lt": THRESHOLDS["PEST_TEMP_MIN"]}},
+            {"temp": {"$gt": THRESHOLDS["PEST_TEMP_MAX"]}}
+        ]
+    })
+    fails = await history_cursor.to_list(length=1)
+    return len(fails) == 0
+
+async def check_heat_anomaly(district: str, current_data: dict) -> bool:
+    """Check if Heat Stress criteria met consistently over last 3 days."""
+    now = datetime.now(timezone.utc)
+    lookback = now - timedelta(days=3)
+    
+    if current_data.get("temperature_c", 0) <= THRESHOLDS["HEAT_STRESS_TEMP"]:
+        return False
+        
+    # Are there any records in the last 3 days where temp was NOT > 42?
+    history_cursor = col_weather_history().find({
+        "district": district,
+        "timestamp": {"$gte": lookback},
+        "temp": {"$lte": THRESHOLDS["HEAT_STRESS_TEMP"]}
+    })
+    fails = await history_cursor.to_list(length=1)
+    return len(fails) == 0
 
 async def scan_for_anomalies():
     """
@@ -57,14 +98,13 @@ async def scan_for_anomalies():
             await trigger_autonomous_campaign(district, "Frost Warning", data)
             continue
             
-        # Check for Pest Risk (simplified for demo: current check + look back 24h if exists)
-        if (data.get("humidity_pct", 0) > THRESHOLDS["PEST_HUMIDITY"] and 
-            THRESHOLDS["PEST_TEMP_MIN"] <= data.get("temperature_c", 0) <= THRESHOLDS["PEST_TEMP_MAX"]):
+        # Check for Pest Risk (48h lookback)
+        if await check_pest_anomaly(district, data):
             await trigger_autonomous_campaign(district, "Pest Alert", data)
             continue
             
-        # Check for Heat Stress
-        if data.get("temperature_c", 0) > THRESHOLDS["HEAT_STRESS_TEMP"]:
+        # Check for Heat Stress (3 days lookback)
+        if await check_heat_anomaly(district, data):
             await trigger_autonomous_campaign(district, "Heat Stress", data)
             continue
 
@@ -96,26 +136,10 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         logger.warning("No growers found in district", district=district)
         return
 
-    # 2. Record Campaign
-    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now().strftime('%Y%m%d')}_{str(uuid.uuid4())[:4]}"
+    # 2. Record Campaign (Consistent UTC ID)
+    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{str(uuid.uuid4())[:4]}"
     
-    campaign_doc = {
-        "_id": campaign_id,
-        "district": district,
-        "anomaly_type": anomaly_type,
-        "triggered_at": datetime.now(timezone.utc),
-        "status": "launching",
-        "target_count": len(growers),
-        "weather_snapshot": {
-            "temp": weather_data.get("temperature_c"),
-            "humidity": weather_data.get("humidity_pct")
-        }
-    }
-    await col_autonomous_campaigns().insert_one(campaign_doc)
-
-    # 3. Dispatch (reuse existing logic)
-    # We need to map growers to the format expected by dispatch_twilio_messages
-    # For autonomous campaigns, we use a fixed crop/product based on anomaly
+    # Determine anomaly-specific metadata
     crop = "General"
     product = "Syngenta Protective Solutions"
     
@@ -126,28 +150,45 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     elif anomaly_type == "Frost Warning":
         product = "Syngenta Frost Protection"
 
-    # Prepare targets
-    targets = []
-    for g in growers:
-        targets.append({
-            "grower_id": g["_id"],
-            "device_type": g.get("device_type", "smartphone"),
-            "language": g.get("language", "Hindi"),
-            "district": district
-        })
+    # Create record in col_campaigns so dispatch logic works correctly
+    campaign_doc = {
+        "_id": campaign_id,
+        "name": f"Autonomous: {anomaly_type} ({district})",
+        "crop": crop,
+        "product": product,
+        "status": "launching",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "total_targets": len(growers),
+        "is_autonomous": True
+    }
+    await col_campaigns().insert_one(campaign_doc)
 
-    # Add to a temporary model_scores collection for dispatch logic consistency
-    # Actually, dispatch_twilio_messages reads from col_model_scores() based on campaign_id
-    from database import col_model_scores
+    # Record in autonomous summary
+    auto_doc = {
+        "_id": campaign_id,
+        "district": district,
+        "anomaly_type": anomaly_type,
+        "triggered_at": datetime.now(timezone.utc),
+        "status": "launching",
+        "target_count": len(growers),
+        "product": product,
+        "weather_snapshot": {
+            "temp": weather_data.get("temperature_c"),
+            "humidity": weather_data.get("humidity_pct")
+        }
+    }
+    await col_autonomous_campaigns().insert_one(auto_doc)
+
+    # 3. Dispatch (reuse existing logic)
     score_docs = [{
         "campaign_id": campaign_id,
-        "grower_id": t["grower_id"],
-        "receptivity_score": 1.0, # High priority
+        "grower_id": g["_id"],
+        "receptivity_score": 1.0, 
         "receptivity_tier": "high",
-        "device_type": t["device_type"],
-        "language": t["language"],
-        "district": t["district"]
-    } for t in targets]
+        "device_type": g.get("device_type", "smartphone"),
+        "language": g.get("language", "Hindi"),
+        "district": district
+    } for g in growers]
     
     await col_model_scores().insert_many(score_docs)
 
