@@ -3,17 +3,35 @@
     "frontend": {
       "release-type": "node",
       "package-name": "syngenta-agri-ai-frontend",
-      "component": "frontend"
+      "component": "frontend",
+      "changelog-sections": [
+        {"type": "feat", "section": "🦁 New Features", "hidden": false},
+        {"type": "fix", "section": "🐛 Bug Fixes", "hidden": false},
+        {"type": "chore", "section": "🧹 Maintenance", "hidden": false},
+        {"type": "docs", "section": "📖 Documentation", "hidden": false}
+      ]
     },
     "backend": {
       "release-type": "python",
       "package-name": "syngenta-agri-ai-backend",
-      "component": "backend"
+      "component": "backend",
+      "changelog-sections": [
+        {"type": "feat", "section": "🐘 Backend Intelligence", "hidden": false},
+        {"type": "fix", "section": "🦟 Bug Squashing", "hidden": false},
+        {"type": "chore", "section": "🛠️ Technical Debt", "hidden": false},
+        {"type": "docs", "section": "📜 API Docs", "hidden": false}
+      ]
     },
     ".": {
       "release-type": "simple",
       "package-name": "syngenta-agri-ai-platform",
-      "component": "platform"
+      "component": "platform",
+      "changelog-sections": [
+        {"type": "feat", "section": "🚜 Platform Growth", "hidden": false},
+        {"type": "fix", "section": "🩹 Patching", "hidden": false},
+        {"type": "chore", "section": "🧱 Infrastructure", "hidden": false},
+        {"type": "docs", "section": "🍃 Knowledge Base", "hidden": false}
+      ]
     }
   },
   "plugins": [
