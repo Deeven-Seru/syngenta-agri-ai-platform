@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Deeven-Seru/syngenta-agri-ai-platform/main/docs/assets/architecture.svg" alt="Syngenta Agri-AI Platform" width="720">
+  <img src="docs/assets/architecture.svg" alt="Syngenta Agri-AI Platform" width="720">
 </p>
 
 <h1 align="center">Syngenta Agri-AI Platform</h1>
@@ -147,11 +147,6 @@ npm run dev
 
 <p align="center">Built for the <strong>Syngenta Hackathon 2026</strong></p>
 
-
-
-
-
-<script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.14/dist/dotlottie-wc.js" type="module"></script>
 <div align="right">
-  <dotlottie-wc src="https://lottie.host/e58f4bc8-406f-4aa4-92c6-13ab9a5681b6/LGJ0CSYkd6.lottie" style="width: 150px; height: 150px;" autoplay loop></dotlottie-wc>
+  <video src="docs/assets/cat.webm" width="120" autoplay loop muted playsinline></video>
 </div>
