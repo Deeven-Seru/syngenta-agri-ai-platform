@@ -15,7 +15,7 @@ To bridge the gap between complex agricultural science and the local grower thro
 - **Frontend**: React 19, Vite, Recharts, Leaflet.css.
 - **Backend**: FastAPI (Python 3.11+), Pydantic v2.
 - **Database**: MongoDB Atlas with **Vector Search** for semantic grower profiling.
-- **Cloud**: Google Cloud Run (Autoscaling), GitHub Actions CI/CD.
+- **Cloud**: Google Cloud Run (Autoscaling).
 
 ## 📈 Strategic Roadmap
 1. [ ] **Twilio Integration**: Autonomous WhatsApp/Voice outreach.
