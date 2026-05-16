@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.1](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/compare/platform-v0.5.0...platform-v0.5.1) (2026-05-16)
+
+
+### 🍃 Knowledge Base
+
+* Add cat animation attribution ([d776714](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/d7767147225872d5ddeba957e89cec81299ef9da))
+* Add lottie cat animation to readme ([5ef4418](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/5ef4418a3a87cd86f3f88fbd7b1e28f6beb8428c))
+* Add lottie cat animation to README ([4bc43f6](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/4bc43f6d0da67bec9dc6c27ec2bc26b611e84eb9))
+* Replace attribution with right-aligned cat animation ([7f30ef6](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/7f30ef62f06daababd45e66cf89b5a990d848050))
+* Replace cat svg with webm video animation ([3b2429b](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/3b2429b5c9ac3c0c6ffa157091156857cc4e0e41))
+* Replace emojis with SVG icons in README ([e1f3dd4](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/e1f3dd448f29f981ce405c0c615e0c64ad72c361))
+* Replace emojis with SVG icons in README ([036b8ba](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/036b8ba4331b1fb8bb55cdcae37b855d91a9a2ee))
+
 ## [0.5.0](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/compare/platform-v0.4.0...platform-v0.5.0) (2026-05-16)
 
 
