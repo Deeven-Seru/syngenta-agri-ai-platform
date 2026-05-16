@@ -144,7 +144,8 @@ INSTRUCTIONS:
 """
 
     try:
-        chat_completion = groq_client.chat.completions.create(
+        chat_completion = await asyncio.to_thread(
+            groq_client.chat.completions.create,
             messages=[
                 {"role": "system", "content": "You are a professional Syngenta Agri-AI assistant."},
                 {"role": "user", "content": prompt}

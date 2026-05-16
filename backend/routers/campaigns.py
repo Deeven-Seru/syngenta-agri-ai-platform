@@ -296,12 +296,11 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Stream targets to avoid memory limits
     cursor = col_model_scores().find({"campaign_id": campaign_id})
     
-    async def send_one(target):
+    async def send_one(target, grower_map):
         nonlocal sent_count, errors
         async with semaphore:
             grower_id = target.get("grower_id")
-            # Fetch grower for each target (can be optimized further with batching if needed)
-            g_doc = await col_growers().find_one({"_id": grower_id})
+            g_doc = grower_map.get(grower_id)
             if not g_doc or not g_doc.get("phone"):
                 return
 
@@ -337,13 +336,21 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Process targets in batches of 100 to balance speed and memory
     batch = []
     async for target in cursor:
-        batch.append(send_one(target))
+        batch.append(target)
         if len(batch) >= 100:
-            await asyncio.gather(*batch)
+            # Bulk fetch growers for this batch
+            batch_grower_ids = list(set(t.get("grower_id") for t in batch))
+            growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
+            batch_grower_map = {g["_id"]: g for g in growers}
+            
+            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
             batch = []
     
     if batch:
-        await asyncio.gather(*batch)
+        batch_grower_ids = list(set(t.get("grower_id") for t in batch))
+        growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
+        batch_grower_map = {g["_id"]: g for g in growers}
+        await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
     await col_campaigns().update_one(
         {"_id": campaign_id},
