@@ -18,14 +18,23 @@ async def validate_twilio_request(request: Request):
     
     signature = request.headers.get("X-Twilio-Signature", "")
     
-    # Use X-Forwarded-Proto for proxy-aware URL building
-    proto = request.headers.get("x-forwarded-proto", "http")
-    url = str(request.url).replace("http://", f"{proto}://").replace("https://", f"{proto}://")
+    # Reconstruct the public URL as seen by Twilio
+    host = request.headers.get("host", "localhost")
+    proto = request.headers.get("x-forwarded-proto", "https")
+    path = request.url.path
+    query = f"?{request.url.query}" if request.url.query else ""
+    
+    # In production, ensure we use https and strip internal ports from host if present
+    if settings.environment == "production":
+        host = host.split(":")[0]
+        url = f"https://{host}{path}{query}"
+    else:
+        url = f"{proto}://{host}{path}{query}"
         
     form_data = await request.form()
     
     if not validator.validate(url, form_data, signature):
-        logger.error("Invalid Twilio signature", url=url)
+        logger.error("Invalid Twilio signature", url=url, host=host, proto=proto)
         if settings.environment == "production":
             raise HTTPException(status_code=403, detail="Invalid signature")
 

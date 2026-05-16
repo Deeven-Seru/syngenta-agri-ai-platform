@@ -287,11 +287,19 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     from twilio.rest import Client
     twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
     
+    # Get campaign details for product name
+    campaign = await col_campaigns().find_one({"_id": campaign_id})
+    product = campaign.get("product", "Syngenta Solution") if campaign else "Syngenta Solution"
+    
     # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
     semaphore = asyncio.Semaphore(10)
     
     sent_count = 0
     errors = 0
+
+    # Cache for generated messages to avoid redundant Gemini calls
+    # Key: (language, device, district)
+    message_cache = {}
 
     # Stream targets to avoid memory limits
     cursor = col_model_scores().find({"campaign_id": campaign_id})
@@ -307,9 +315,52 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
             phone = g_doc["phone"]
             device = target.get("device_type", "smartphone")
             lang = g_doc.get("language", "Hindi")
-            voice_lang = "hi-IN" if lang == "Hindi" else "mr-IN" if lang == "Marathi" else "en-IN"
+            district = target.get("district", "Unknown")
             
-            msg_text = target.get("message_native") 
+            # Map DB language to Twilio voice code
+            voice_lang_map = {
+                "Hindi": "hi-IN",
+                "Marathi": "mr-IN",
+                "Punjabi": "pa-IN",
+                "Gujarati": "gu-IN",
+                "Kannada": "kn-IN",
+                "Bengali": "bn-IN",
+                "Telugu": "te-IN",
+                "Tamil": "ta-IN"
+            }
+            voice_lang = voice_lang_map.get(lang, "hi-IN")
+            
+            # Check cache or generate message
+            cache_key = (lang, device, district)
+            msg_text = target.get("message_native")
+            
+            if not msg_text:
+                if cache_key in message_cache:
+                    msg_text = message_cache[cache_key]
+                else:
+                    # Generate on-the-fly
+                    weather = await get_district_weather(district)
+                    weather_ctx = weather.get("weather_context", "")
+                    
+                    if device == "smartphone":
+                        gen = await generate_whatsapp_message(
+                            grower_language=lang,
+                            crop=campaign_crop,
+                            product=product,
+                            weather_context=weather_ctx
+                        )
+                        msg_text = gen.get("message_native")
+                    else:
+                        msg_text = await generate_voice_script(
+                            grower_language=lang,
+                            crop=campaign_crop,
+                            product=product,
+                            weather_context=weather_ctx
+                        )
+                    
+                    if msg_text:
+                        message_cache[cache_key] = msg_text
+
             if not msg_text:
                 msg_text = f"Greetings from Syngenta. Check your {campaign_crop} crop."
 

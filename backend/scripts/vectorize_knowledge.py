@@ -65,7 +65,7 @@ async def vectorize_inventory():
             "in_stock": {"$first": "$in_stock"}
         }}
     ]
-    inv_items = await col_inventory().aggregate(pipeline).to_list(length=100)
+    inv_items = await col_inventory().aggregate(pipeline).to_list(length=20000)
     
     # Get retailer details for location context (only for retailers in the current inventory batch)
     retailer_ids = list(set(item["_id"]["retailer_id"] for item in inv_items))

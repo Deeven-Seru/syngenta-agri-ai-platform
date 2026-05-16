@@ -11,7 +11,7 @@ db.knowledge_vectors.deleteMany({ 'metadata.source': 'in-cluster-script' });
 
 // 2. Prepare Retailer/Inventory Chunks
 print('🏪 Processing Retailer Inventory...');
-const inventoryChunks = db.retailer_inventory.aggregate([
+db.retailer_inventory.aggregate([
     { $match: { week_end_date: "2026-03-29" } },
     {
         $lookup: {
@@ -40,16 +40,13 @@ const inventoryChunks = db.retailer_inventory.aggregate([
             }
         }
     }
-]).toArray();
-
-if (inventoryChunks.length > 0) {
-    print(`🚀 Inserting ${inventoryChunks.length} inventory chunks...`);
-    db.knowledge_vectors.insertMany(inventoryChunks);
-}
+]).forEach(chunk => {
+    db.knowledge_vectors.insertOne(chunk);
+});
 
 // 3. Prepare Rep Chunks
 print('👔 Processing Representative Territories...');
-const repChunks = db.reps_territory.aggregate([
+db.reps_territory.aggregate([
     {
         $project: {
             text_content: {
@@ -67,11 +64,8 @@ const repChunks = db.reps_territory.aggregate([
             }
         }
     }
-]).toArray();
-
-if (repChunks.length > 0) {
-    print(`🚀 Inserting ${repChunks.length} rep chunks...`);
-    db.knowledge_vectors.insertMany(repChunks);
-}
+]).forEach(chunk => {
+    db.knowledge_vectors.insertOne(chunk);
+});
 
 print('✅ Data Preparation Complete. Documents are ready in knowledge_vectors (awaiting embeddings).');
