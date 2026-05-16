@@ -1,0 +1,8 @@
+{
+  "packages": {
+    "frontend": {
+      "release-type": "node",
+      "package-name": "syngenta-agri-ai"
+    }
+  }
+}
