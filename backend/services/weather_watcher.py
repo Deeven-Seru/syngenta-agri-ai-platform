@@ -178,7 +178,7 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         "crop": crop,
         "product": product,
         "status": "launching",
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "total_targets": grower_count,
         "is_autonomous": True
     }
