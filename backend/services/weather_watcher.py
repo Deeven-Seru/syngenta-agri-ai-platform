@@ -47,7 +47,15 @@ async def check_pest_anomaly(district: str, current_data: dict) -> bool:
         ]
     })
     fails = await history_cursor.to_list(length=1)
-    return len(fails) == 0
+    if fails:
+        return False
+
+    # Ensure at least one historical record exists to confirm the 48h trend
+    has_history = await col_weather_history().find_one({
+        "district": district,
+        "timestamp": {"$gte": lookback, "$lt": now - timedelta(minutes=15)}
+    })
+    return has_history is not None
 
 async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     """Check if Heat Stress criteria met consistently over last 3 days."""
