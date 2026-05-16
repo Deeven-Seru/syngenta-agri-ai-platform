@@ -198,9 +198,16 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
 
     for target in targets:
         lang = target.get("language", "Hindi")
-        device = target.get("device_type", "smartphone")
-        key = f"{lang}:{device}"
         
+        # Resolve actual device (prioritize target field, then DB lookup)
+        device = target.get("device_type")
+        grower_id = target.get("grower_id")
+        
+        if not device:
+            g_doc = await col_growers().find_one({"_id": grower_id})
+            device = g_doc.get("device_type", "smartphone") if g_doc else "smartphone"
+        
+        key = f"{lang}:{device}"
         if key in seen_keys:
             continue
         seen_keys.add(key)
@@ -210,12 +217,6 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
         weather = await get_district_weather(district)
         weather_ctx = weather.get("weather_context", "")
 
-        # Look up actual device from DB if not in target
-        device = target.get("device_type")
-        if not device:
-            g_doc = await col_growers().find_one({"_id": target.get("grower_id")})
-            device = g_doc.get("device_type", "smartphone") if g_doc else "smartphone"
-            
         if device == "smartphone":
             msg = await generate_whatsapp_message(
                 grower_language=lang,
@@ -275,66 +276,51 @@ async def get_campaign(campaign_id: str):
     return campaign
 
 
-@router.post("/{campaign_id}/launch")
-async def launch_campaign(campaign_id: str):
-    """
-    Launch: actually dispatch the queue via Twilio.
-    """
+async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets: list, settings):
+    """Background task to send Twilio messages without blocking the API."""
     from twilio.rest import Client
-    from config import get_settings
-    settings = get_settings()
-    
-    if not settings.twilio_account_sid or not settings.twilio_auth_token:
-        raise HTTPException(status_code=500, detail="Twilio credentials not configured")
-        
     twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-    
-    campaign = await col_campaigns().find_one({"_id": campaign_id})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-
-    # Get scored targets
-    targets = await col_model_scores().find({"campaign_id": campaign_id}).to_list(length=100)
-    
-    # We also need grower phone numbers which might be in the growers collection
-    # but for demo we check if grower_id is a phone or look it up
     
     sent_count = 0
     errors = 0
 
+    # Bulk fetch grower details to avoid N+1 queries
+    grower_ids = [t.get("grower_id") for t in targets]
+    growers = await col_growers().find({"_id": {"$in": grower_ids}}).to_list(length=None)
+    grower_map = {g["_id"]: g for g in growers}
+
     for target in targets:
         grower_id = target.get("grower_id")
-        g_doc = await col_growers().find_one({"_id": grower_id})
-        phone = g_doc.get("phone") if g_doc else None
-        
-        if not phone:
-            # Skip if no phone
+        g_doc = grower_map.get(grower_id)
+        if not g_doc or not g_doc.get("phone"):
             continue
 
+        phone = g_doc["phone"]
         device = target.get("device_type", "smartphone")
-        # Ensure we have content (this usually would be pre-generated or generated here)
-        # For simplicity we generate a quick one if missing
+        lang = g_doc.get("language", "Hindi")
+        # Map DB language to Twilio voice code
+        voice_lang = "hi-IN" if lang == "Hindi" else "mr-IN" if lang == "Marathi" else "en-IN"
+        
         msg_text = target.get("message_native") 
         if not msg_text:
-            msg_text = f"Greetings from Syngenta. Check your {campaign['crop']} crop."
+            msg_text = f"Greetings from Syngenta. Check your {campaign_crop} crop."
 
         try:
             if device == "smartphone":
-                # Send WhatsApp
                 twilio_client.messages.create(
                     from_=settings.twilio_whatsapp_from,
                     body=msg_text,
                     to=f"whatsapp:{phone}"
                 )
             else:
-                # Initiate automated call
                 twilio_client.calls.create(
                     from_=settings.twilio_phone_number,
                     to=phone,
-                    twiml=f'<Response><Say language="hi-IN">{msg_text}</Say></Response>'
+                    twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
                 )
             sent_count += 1
         except Exception as e:
+            logger.error("Twilio dispatch failed", error=str(e), grower_id=grower_id)
             errors += 1
 
     await col_campaigns().update_one(
@@ -347,9 +333,39 @@ async def launch_campaign(campaign_id: str):
         }}
     )
 
+
+@router.post("/{campaign_id}/launch")
+async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
+    """
+    Launch: dispatch the queue via Twilio in the background.
+    """
+    settings = get_settings()
+    if not settings.twilio_account_sid or not settings.twilio_auth_token:
+        raise HTTPException(status_code=500, detail="Twilio credentials not configured")
+        
+    campaign = await col_campaigns().find_one({"_id": campaign_id})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Get ALL scored targets (removing the 100 limit bug)
+    targets = await col_model_scores().find({"campaign_id": campaign_id}).to_list(length=None)
+    
+    if not targets:
+        raise HTTPException(status_code=400, detail="No targets found for this campaign")
+
+    # Mark as launching and offload to background
+    await col_campaigns().update_one({"_id": campaign_id}, {"$set": {"status": "launching"}})
+    
+    background_tasks.add_task(
+        dispatch_twilio_messages, 
+        campaign_id, 
+        campaign["crop"], 
+        targets, 
+        settings
+    )
+
     return {
         "campaign_id": campaign_id,
-        "status": "launched",
-        "sent_successfully": sent_count,
-        "failed": errors
+        "status": "launching",
+        "targets_queued": len(targets)
     }

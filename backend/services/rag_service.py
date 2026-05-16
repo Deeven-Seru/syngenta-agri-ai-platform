@@ -14,13 +14,18 @@ logger = structlog.get_logger()
 async def get_embedding(text: str):
     settings = get_settings()
     client = genai.Client(api_key=settings.gemini_api_key)
-    response = client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=[text]
-    )
-    if not response or not response.embeddings:
-        return [0.0] * 768
-    return response.embeddings[0].values
+    try:
+        response = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=[text]
+        )
+        if not response or not response.embeddings:
+            logger.error("Embedding generation returned empty response")
+            return None
+        return response.embeddings[0].values
+    except Exception as e:
+        logger.error("Embedding generation failed", error=str(e))
+        return None
 
 async def search_knowledge(query_embedding: list[float], district: str, grower_id: str):
     """
@@ -47,6 +52,9 @@ async def search_knowledge(query_embedding: list[float], district: str, grower_i
       ]
     }
     """
+    if query_embedding is None:
+        return []
+
     pipeline = [
         {
             "$vectorSearch": {
@@ -75,13 +83,9 @@ async def search_knowledge(query_embedding: list[float], district: str, grower_i
     try:
         cursor = col_knowledge_vectors().aggregate(pipeline)
         results = await cursor.to_list(length=5)
-        if results is None:
-            print("DEBUG: results is None")
-            return []
-        print(f"DEBUG: found {len(results)} search results")
-        return results
+        logger.debug("Vector search completed", result_count=len(results) if results else 0)
+        return results or []
     except Exception as e:
-        print(f"DEBUG: Vector search exception: {e}")
         logger.error("Vector search failed", error=str(e))
         # Fallback to a simple keyword search or empty list if index not ready
         return []
@@ -90,11 +94,16 @@ async def generate_grounded_answer(phone_number: str, question: str) -> str:
     settings = get_settings()
     groq_client = Groq(api_key=settings.groq_api_key)
     
+    # Normalize phone: strip '+' and 'whatsapp:'
+    clean_phone = phone_number.replace("whatsapp:", "").replace("+", "")
+    
     # 1. Identify Grower
-    grower = await col_growers().find_one({"_id": phone_number}) # Assuming _id is phone or indexed
+    grower = await col_growers().find_one({"_id": clean_phone}) 
     if not grower:
-        # Try finding by a field if _id is different
-        grower = await col_growers().find_one({"phone": phone_number})
+        grower = await col_growers().find_one({"phone": clean_phone})
+        # If still not found, try with the original + (some DBs store with +)
+        if not grower and not phone_number.startswith("whatsapp:"):
+             grower = await col_growers().find_one({"_id": phone_number}) or await col_growers().find_one({"phone": phone_number})
         
     grower_context = ""
     district = "unknown"
@@ -109,9 +118,6 @@ async def generate_grounded_answer(phone_number: str, question: str) -> str:
     g_id = grower.get("_id") if grower else "unknown"
     search_results = await search_knowledge(embedding, district, g_id)
     
-    if search_results is None:
-        search_results = []
-        
     context_text = "\n".join([r.get("text_content", "") for r in search_results if r])
     
     # 3. Prompt Groq
@@ -135,19 +141,17 @@ INSTRUCTIONS:
 5. Be polite and professional.
 """
 
-    chat_completion = groq_client.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a professional Syngenta Agri-AI assistant."
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-        model="llama-3.3-70b-versatile", # Using 70b for high-quality reasoning
-        temperature=0.2,
-    )
-    
-    return chat_completion.choices[0].message.content
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You are a professional Syngenta Agri-AI assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            model="llama-3.3-70b-versatile", 
+            temperature=0.2,
+        )
+        answer = chat_completion.choices[0].message.content
+        return answer or "I am sorry, I am unable to generate a response at the moment. Please try again later."
+    except Exception as e:
+        logger.error("Groq generation failed", error=str(e))
+        return "I apologize, but I am having trouble connecting to my knowledge base. Please call us back in a few minutes."

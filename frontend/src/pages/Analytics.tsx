@@ -132,7 +132,13 @@ export default function Analytics() {
                     initialViewState={INITIAL_VIEW_STATE}
                     controller={true}
                     layers={layers}
-                    getTooltip={({object}) => object && `Density: ${object.points.length} Districts`}
+                    getTooltip={({ object }) => {
+                        if (!object) return null;
+                        const pointCount = Array.isArray(object.points) ? object.points.length : 0;
+                        return pointCount > 0
+                            ? `Density: ${pointCount} Districts in bin`
+                            : 'Density bin';
+                    }}
                 >
                     <Map 
                         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
