@@ -16,10 +16,10 @@ async def validate_twilio_request(request: Request):
     validator = RequestValidator(settings.twilio_auth_token)
     
     signature = request.headers.get("X-Twilio-Signature", "")
-    url = str(request.url)
     
-    if settings.environment == "production":
-        url = url.replace("http://", "https://")
+    # Use X-Forwarded-Proto for proxy-aware URL building
+    proto = request.headers.get("x-forwarded-proto", "http")
+    url = str(request.url).replace("http://", f"{proto}://").replace("https://", f"{proto}://")
         
     form_data = await request.form()
     
@@ -37,7 +37,7 @@ async def handle_whatsapp_incoming(request: Request):
     form_data = await request.form()
     
     incoming_msg = form_data.get("Body")
-    sender_phone = form_data.get("From")
+    sender_phone = form_data.get("From", "")
     
     if not incoming_msg or not sender_phone:
         logger.warning("Empty WhatsApp payload received")

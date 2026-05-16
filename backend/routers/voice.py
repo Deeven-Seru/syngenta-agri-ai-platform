@@ -17,11 +17,10 @@ async def validate_twilio_request(request: Request):
     validator = RequestValidator(settings.twilio_auth_token)
     
     signature = request.headers.get("X-Twilio-Signature", "")
-    url = str(request.url)
     
-    # In production/cloud run, request.url might be http but Twilio sees https
-    if settings.environment == "production":
-        url = url.replace("http://", "https://")
+    # Use X-Forwarded-Proto for proxy-aware URL building
+    proto = request.headers.get("x-forwarded-proto", "http")
+    url = str(request.url).replace("http://", f"{proto}://").replace("https://", f"{proto}://")
         
     form_data = await request.form()
     
@@ -38,6 +37,10 @@ async def handle_voice_incoming(request: Request):
     await validate_twilio_request(request)
     form_data = await request.form()
     caller_phone = form_data.get("From", "").replace("+", "")
+    
+    if not caller_phone:
+        logger.warning("Empty Voice From field received")
+        return Response(content="<Response><Reject/></Response>", media_type="text/xml")
     
     # Determine language from grower profile
     grower = await col_growers().find_one({"_id": caller_phone}) or await col_growers().find_one({"phone": caller_phone})

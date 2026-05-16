@@ -287,6 +287,9 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
     from twilio.rest import Client
     twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
     
+    # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
+    semaphore = asyncio.Semaphore(10)
+    
     sent_count = 0
     errors = 0
 
@@ -295,41 +298,45 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
     growers = await col_growers().find({"_id": {"$in": grower_ids}}).to_list(length=len(grower_ids))
     grower_map = {g["_id"]: g for g in growers}
 
-    for target in targets:
-        grower_id = target.get("grower_id")
-        g_doc = grower_map.get(grower_id)
-        if not g_doc or not g_doc.get("phone"):
-            continue
+    async def send_one(target):
+        nonlocal sent_count, errors
+        async with semaphore:
+            grower_id = target.get("grower_id")
+            g_doc = grower_map.get(grower_id)
+            if not g_doc or not g_doc.get("phone"):
+                return
 
-        phone = g_doc["phone"]
-        device = target.get("device_type", "smartphone")
-        lang = g_doc.get("language", "Hindi")
-        # Map DB language to Twilio voice code
-        voice_lang = "hi-IN" if lang == "Hindi" else "mr-IN" if lang == "Marathi" else "en-IN"
-        
-        msg_text = target.get("message_native") 
-        if not msg_text:
-            msg_text = f"Greetings from Syngenta. Check your {campaign_crop} crop."
+            phone = g_doc["phone"]
+            device = target.get("device_type", "smartphone")
+            lang = g_doc.get("language", "Hindi")
+            voice_lang = "hi-IN" if lang == "Hindi" else "mr-IN" if lang == "Marathi" else "en-IN"
+            
+            msg_text = target.get("message_native") 
+            if not msg_text:
+                msg_text = f"Greetings from Syngenta. Check your {campaign_crop} crop."
 
-        try:
-            if device == "smartphone":
-                await asyncio.to_thread(
-                    twilio_client.messages.create,
-                    from_=settings.twilio_whatsapp_from,
-                    body=msg_text,
-                    to=f"whatsapp:{phone}"
-                )
-            else:
-                await asyncio.to_thread(
-                    twilio_client.calls.create,
-                    from_=settings.twilio_phone_number,
-                    to=phone,
-                    twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
-                )
-            sent_count += 1
-        except Exception as e:
-            logger.error("Twilio dispatch failed", error=str(e), grower_id=grower_id)
-            errors += 1
+            try:
+                if device == "smartphone":
+                    await asyncio.to_thread(
+                        twilio_client.messages.create,
+                        from_=settings.twilio_whatsapp_from,
+                        body=msg_text,
+                        to=f"whatsapp:{phone}"
+                    )
+                else:
+                    await asyncio.to_thread(
+                        twilio_client.calls.create,
+                        from_=settings.twilio_phone_number,
+                        to=phone,
+                        twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
+                    )
+                sent_count += 1
+            except Exception as e:
+                logger.error("Twilio dispatch failed", error=str(e), grower_id=grower_id)
+                errors += 1
+
+    # Execute all dispatches with the concurrency limit
+    await asyncio.gather(*(send_one(t) for t in targets))
 
     await col_campaigns().update_one(
         {"_id": campaign_id},
@@ -355,8 +362,10 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Get ALL scored targets (removing the 100 limit bug)
-    targets = await col_model_scores().find({"campaign_id": campaign_id}).to_list(length=10000)
+    # Get ALL scored targets (streaming for scalability)
+    targets = []
+    async for target in col_model_scores().find({"campaign_id": campaign_id}):
+        targets.append(target)
     
     if not targets:
         raise HTTPException(status_code=400, detail="No targets found for this campaign")
