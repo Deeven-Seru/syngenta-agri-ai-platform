@@ -94,20 +94,28 @@ async def scan_for_anomalies():
     weather_map = await get_bulk_district_weather(all_districts)
     
     now = datetime.now(timezone.utc)
+    history_docs = []
     
     for district, data in weather_map.items():
         if "error" in data:
             continue
             
-        # Store in history
-        history_doc = {
+        # Prepare history doc
+        history_docs.append({
             "district": district,
             "timestamp": now,
             "temp": data.get("temperature_c"),
             "humidity": data.get("humidity_pct"),
             "precip": data.get("precipitation_mm")
-        }
-        await col_weather_history().insert_one(history_doc)
+        })
+
+    if history_docs:
+        await col_weather_history().insert_many(history_docs)
+
+    # Re-iterate to check anomalies after logging history
+    for district, data in weather_map.items():
+        if "error" in data:
+            continue
         
         # Check for Frost (Immediate)
         if data.get("temperature_c") is not None and data.get("temperature_c") < THRESHOLDS["FROST_TEMP"]:
@@ -145,10 +153,8 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     logger.info("🚨 Triggering Autonomous Campaign!", district=district, type=anomaly_type)
     
     # 1. Identify Growers in District
-    growers_cursor = col_growers().find({"district": district})
-    growers = await growers_cursor.to_list(length=1000) # Safety limit
-    
-    if not growers:
+    grower_count = await col_growers().count_documents({"district": district})
+    if grower_count == 0:
         logger.warning("No growers found in district", district=district)
         return
 
@@ -173,8 +179,8 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         "crop": crop,
         "product": product,
         "status": "launching",
-        "created_at": datetime.now(timezone.utc),
-        "total_targets": len(growers),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "total_targets": grower_count,
         "is_autonomous": True
     }
     await col_campaigns().insert_one(campaign_doc)
@@ -186,7 +192,7 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         "anomaly_type": anomaly_type,
         "triggered_at": datetime.now(timezone.utc),
         "status": "launching",
-        "target_count": len(growers),
+        "target_count": grower_count,
         "product": product,
         "weather_snapshot": {
             "temp": weather_data.get("temperature_c"),
@@ -195,21 +201,31 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     }
     await col_autonomous_campaigns().insert_one(auto_doc)
 
-    # 3. Dispatch (reuse existing logic)
-    score_docs = [{
-        "campaign_id": campaign_id,
-        "grower_id": g["_id"],
-        "receptivity_score": 1.0, 
-        "receptivity_tier": "high",
-        "device_type": g.get("device_type", "smartphone"),
-        "language": g.get("language", "Hindi"),
-        "district": district
-    } for g in growers]
+    # 3. Prepare targets and dispatch (reuse existing logic)
+    # Stream growers to col_model_scores in batches
+    growers_cursor = col_growers().find({"district": district})
     
-    await col_model_scores().insert_many(score_docs)
+    score_docs_batch = []
+    async for g in growers_cursor:
+        score_docs_batch.append({
+            "campaign_id": campaign_id,
+            "grower_id": g["_id"],
+            "receptivity_score": 1.0, 
+            "receptivity_tier": "high",
+            "device_type": g.get("device_type", "smartphone"),
+            "language": g.get("language", "Hindi"),
+            "district": district
+        })
+        
+        if len(score_docs_batch) >= 1000:
+            await col_model_scores().insert_many(score_docs_batch)
+            score_docs_batch = []
+            
+    if score_docs_batch:
+        await col_model_scores().insert_many(score_docs_batch)
 
     settings = get_settings()
     # Offload to background
     asyncio.create_task(dispatch_twilio_messages(campaign_id, crop, settings))
     
-    logger.info("🚀 Autonomous Campaign Dispatched", id=campaign_id)
+    logger.info("🚀 Autonomous Campaign Dispatched", id=campaign_id, targets=grower_count)
