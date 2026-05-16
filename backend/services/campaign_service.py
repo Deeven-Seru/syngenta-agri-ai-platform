@@ -7,6 +7,7 @@ Campaign Dispatch Service — Twilio Messaging & IVR
 import asyncio
 from datetime import datetime, timezone
 import structlog
+from twilio.rest import Client
 from database import col_growers, col_campaigns, col_model_scores, col_autonomous_campaigns
 from services.content_generator import generate_whatsapp_message, generate_voice_script
 from services.weather_service import get_district_weather
@@ -15,7 +16,6 @@ logger = structlog.get_logger()
 
 async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, settings):
     """Background task to send Twilio messages without blocking the API."""
-    from twilio.rest import Client
     twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
     
     # Get campaign details for product name
