@@ -34,6 +34,13 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Cache for generated messages to avoid redundant Gemini calls
     # Key: (language, device, district)
     message_cache = {}
+    
+    # Pre-fetch weather for all districts in the campaign to avoid redundant API calls
+    weather_cache = {}
+    unique_districts = await col_model_scores().distinct("district", {"campaign_id": campaign_id})
+    if unique_districts:
+        from services.weather_service import get_bulk_district_weather
+        weather_cache = await get_bulk_district_weather(unique_districts)
 
     # Stream targets to avoid memory limits, sorted by receptivity_score
     cursor = col_model_scores().find({"campaign_id": campaign_id}).sort([("receptivity_score", -1)])
@@ -72,8 +79,8 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
                 if cache_key in message_cache:
                     msg_text = message_cache[cache_key]
                 else:
-                    # Generate on-the-fly
-                    weather = await get_district_weather(district)
+                    # Use pre-fetched weather
+                    weather = weather_cache.get(district, {})
                     weather_ctx = weather.get("weather_context", "")
                     
                     if device == "smartphone":
@@ -137,7 +144,7 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         batch_grower_map = {g["_id"]: g for g in growers}
         await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
-    # Final updates with Native Datetime
+    # Final updates with ISO string timestamps
     now = datetime.now(timezone.utc).isoformat()
     status_update = {
         "status": "launched", 
