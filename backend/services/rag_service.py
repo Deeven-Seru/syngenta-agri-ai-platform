@@ -97,13 +97,15 @@ async def generate_grounded_answer(phone_number: str, question: str) -> str:
     # Normalize phone: strip '+' and 'whatsapp:'
     clean_phone = phone_number.replace("whatsapp:", "").replace("+", "")
     
-    # 1. Identify Grower
-    grower = await col_growers().find_one({"_id": clean_phone}) 
-    if not grower:
-        grower = await col_growers().find_one({"phone": clean_phone})
-        # If still not found, try with the original + (some DBs store with +)
-        if not grower and not phone_number.startswith("whatsapp:"):
-             grower = await col_growers().find_one({"_id": phone_number}) or await col_growers().find_one({"phone": phone_number})
+    # 1. Identify Grower (consolidated query for efficiency)
+    grower = await col_growers().find_one({
+        "$or": [
+            {"_id": clean_phone}, 
+            {"phone": clean_phone},
+            {"_id": phone_number},
+            {"phone": phone_number}
+        ]
+    })
         
     grower_context = ""
     district = "unknown"
@@ -150,7 +152,7 @@ INSTRUCTIONS:
             model="llama-3.3-70b-versatile", 
             temperature=0.2,
         )
-        answer = chat_completion.choices[0].message.content
+        answer = chat_completion.choices[0].message.content if chat_completion.choices else None
         return answer or "I am sorry, I am unable to generate a response at the moment. Please try again later."
     except Exception as e:
         logger.error("Groq generation failed", error=str(e))

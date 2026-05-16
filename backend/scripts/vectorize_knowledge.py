@@ -67,10 +67,10 @@ async def vectorize_inventory():
     ]
     inv_items = await col_inventory().aggregate(pipeline).to_list(length=100)
     
-    # Get retailer details for location context (streaming to avoid memory limits)
-    retailer_map = {}
-    async for r in col_retailers().find({}):
-        retailer_map[r["_id"]] = r
+    # Get retailer details for location context (only for retailers in the current inventory batch)
+    retailer_ids = list(set(item["_id"]["retailer_id"] for item in inv_items))
+    retailers = await col_retailers().find({"_id": {"$in": retailer_ids}}).to_list(length=len(retailer_ids))
+    retailer_map = {r["_id"]: r for r in retailers}
     
     chunks = []
     for item in inv_items:

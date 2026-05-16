@@ -282,7 +282,7 @@ async def get_campaign(campaign_id: str):
     return campaign
 
 
-async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets: list, settings):
+async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, settings):
     """Background task to send Twilio messages without blocking the API."""
     from twilio.rest import Client
     twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
@@ -293,16 +293,15 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
     sent_count = 0
     errors = 0
 
-    # Bulk fetch grower details to avoid N+1 queries
-    grower_ids = list(set(t.get("grower_id") for t in targets))
-    growers = await col_growers().find({"_id": {"$in": grower_ids}}).to_list(length=len(grower_ids))
-    grower_map = {g["_id"]: g for g in growers}
-
+    # Stream targets to avoid memory limits
+    cursor = col_model_scores().find({"campaign_id": campaign_id})
+    
     async def send_one(target):
         nonlocal sent_count, errors
         async with semaphore:
             grower_id = target.get("grower_id")
-            g_doc = grower_map.get(grower_id)
+            # Fetch grower for each target (can be optimized further with batching if needed)
+            g_doc = await col_growers().find_one({"_id": grower_id})
             if not g_doc or not g_doc.get("phone"):
                 return
 
@@ -335,8 +334,16 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
                 logger.error("Twilio dispatch failed", error=str(e), grower_id=grower_id)
                 errors += 1
 
-    # Execute all dispatches with the concurrency limit
-    await asyncio.gather(*(send_one(t) for t in targets))
+    # Process targets in batches of 100 to balance speed and memory
+    batch = []
+    async for target in cursor:
+        batch.append(send_one(target))
+        if len(batch) >= 100:
+            await asyncio.gather(*batch)
+            batch = []
+    
+    if batch:
+        await asyncio.gather(*batch)
 
     await col_campaigns().update_one(
         {"_id": campaign_id},
@@ -362,12 +369,9 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Get ALL scored targets (streaming for scalability)
-    targets = []
-    async for target in col_model_scores().find({"campaign_id": campaign_id}):
-        targets.append(target)
-    
-    if not targets:
+    # Check if targets exist without materializing the list
+    first_target = await col_model_scores().find_one({"campaign_id": campaign_id})
+    if not first_target:
         raise HTTPException(status_code=400, detail="No targets found for this campaign")
 
     # Mark as launching and offload to background
@@ -377,12 +381,10 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
         dispatch_twilio_messages, 
         campaign_id, 
         campaign["crop"], 
-        targets, 
         settings
     )
 
     return {
         "campaign_id": campaign_id,
-        "status": "launching",
-        "targets_queued": len(targets)
+        "status": "launching"
     }

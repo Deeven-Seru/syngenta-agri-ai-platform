@@ -42,8 +42,10 @@ async def handle_voice_incoming(request: Request):
         logger.warning("Empty Voice From field received")
         return Response(content="<Response><Reject/></Response>", media_type="text/xml")
     
-    # Determine language from grower profile
-    grower = await col_growers().find_one({"_id": caller_phone}) or await col_growers().find_one({"phone": caller_phone})
+    # Determine language from grower profile (efficient single lookup)
+    grower = await col_growers().find_one({
+        "$or": [{"_id": caller_phone}, {"phone": caller_phone}]
+    })
     lang = grower.get("language", "Hindi") if grower else "Hindi"
     
     # Map to Twilio codes
