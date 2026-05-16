@@ -66,3 +66,9 @@ def col_model_scores():
 
 def col_knowledge_vectors():
     return get_db()["knowledge_vectors"]
+
+def col_weather_history():
+    return get_db()["weather_history"]
+
+def col_autonomous_campaigns():
+    return get_db()["autonomous_campaigns"]
