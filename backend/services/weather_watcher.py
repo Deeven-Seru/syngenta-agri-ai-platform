@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 import structlog
 import uuid
+from fastapi import BackgroundTasks
 
 from database import col_weather_history, col_autonomous_campaigns, col_growers, col_model_scores, col_campaigns
 from services.weather_service import get_bulk_district_weather, DISTRICT_COORDS
@@ -83,7 +84,7 @@ async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     })
     return has_history is not None
 
-async def scan_for_anomalies():
+async def scan_for_anomalies(background_tasks: BackgroundTasks):
     """
     1. Fetch current weather for all districts
     2. Store in history
@@ -113,27 +114,36 @@ async def scan_for_anomalies():
     if history_docs:
         await col_weather_history().insert_many(history_docs)
 
-    # Check anomalies for all districts concurrently
-    tasks = [process_district_anomalies(district, data) for district, data in weather_map.items() if "error" not in data]
+    # Check anomalies for all districts with limited concurrency (max 10)
+    semaphore = asyncio.Semaphore(10)
+
+    async def sem_process(district: str, data: dict, background_tasks: BackgroundTasks):
+        async with semaphore:
+            try:
+                await process_district_anomalies(district, data, background_tasks)
+            except Exception as e:
+                logger.error("District anomaly processing failed", district=district, error=str(e))
+
+    tasks = [sem_process(district, data, background_tasks) for district, data in weather_map.items() if "error" not in data]
     await asyncio.gather(*tasks)
 
     logger.info("✅ Weather Watcher scan complete.")
 
-async def process_district_anomalies(district: str, data: dict):
+async def process_district_anomalies(district: str, data: dict, background_tasks: BackgroundTasks):
     """Check all anomalies for a single district without masking."""
     # Check for Frost (Immediate)
     if data.get("temperature_c") is not None and data.get("temperature_c") < THRESHOLDS["FROST_TEMP"]:
-        await trigger_autonomous_campaign(district, "Frost Warning", data)
+        await trigger_autonomous_campaign(district, "Frost Warning", data, background_tasks)
         
     # Check for Pest Risk (48h lookback)
     if await check_pest_anomaly(district, data):
-        await trigger_autonomous_campaign(district, "Pest Alert", data)
+        await trigger_autonomous_campaign(district, "Pest Alert", data, background_tasks)
         
     # Check for Heat Stress (3 days lookback)
     if await check_heat_anomaly(district, data):
-        await trigger_autonomous_campaign(district, "Heat Stress", data)
+        await trigger_autonomous_campaign(district, "Heat Stress", data, background_tasks)
 
-async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_data: dict):
+async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_data: dict, background_tasks: BackgroundTasks):
     """
     Identify growers, generate content, and dispatch.
     """
@@ -216,16 +226,8 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         await _score_and_insert_batch(campaign_id, chunk, product, crop, district)
 
     settings = get_settings()
-    # Offload to background with error logging
-    dispatch_task = asyncio.create_task(dispatch_twilio_messages(campaign_id, crop, settings))
-    
-    def on_task_done(t):
-        try:
-            t.result()
-        except Exception as e:
-            logger.error("Autonomous dispatch task failed", campaign_id=campaign_id, error=str(e))
-            
-    dispatch_task.add_done_callback(on_task_done)
+    # Offload to background using FastAPI BackgroundTasks for reliability
+    background_tasks.add_task(dispatch_twilio_messages, campaign_id, crop, settings)
     
     logger.info("🚀 Autonomous Campaign Dispatched", id=campaign_id, targets=grower_count)
 

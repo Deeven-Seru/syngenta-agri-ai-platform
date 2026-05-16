@@ -16,7 +16,7 @@ async def trigger_weather_scan(background_tasks: BackgroundTasks):
     """
     Manually trigger a weather anomaly scan.
     """
-    background_tasks.add_task(scan_for_anomalies)
+    background_tasks.add_task(scan_for_anomalies, background_tasks)
     return {"status": "scan_triggered", "message": "Weather watcher is scanning districts for anomalies."}
 
 @router.get("/campaigns")
