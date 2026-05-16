@@ -42,5 +42,5 @@ async def get_weather_history(district: Optional[str] = None, limit: int = 50):
     cursor = col_weather_history().find(query, sort=[("timestamp", -1)]).limit(limit)
     history = await cursor.to_list(length=limit)
     for h in history:
-        h.pop("_id", None)
+        h["id"] = str(h.pop("_id"))
     return {"history": history, "count": len(history)}
