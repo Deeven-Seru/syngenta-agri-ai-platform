@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { api } from '../api';
 import {
-  IconEdit, IconGlobe, IconCheck, IconX,
-  IconSun, IconLeaf, IconRefresh, IconMessage,
+  IconEdit, IconGlobe, IconX,
+  IconSun, IconLeaf, IconMessage,
 } from '../icons';
 
 const LANGUAGES = ['Hindi', 'Punjabi', 'Marathi', 'Gujarati', 'Kannada', 'Bengali'];
