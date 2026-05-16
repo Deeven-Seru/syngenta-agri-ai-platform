@@ -33,7 +33,7 @@ async def validate_twilio_request(request: Request):
         
     form_data = await request.form()
     
-    if not validator.validate(url, form_data, signature):
+    if not validator.validate(url, dict(form_data), signature):
         logger.error("Invalid Twilio signature", url=url, host=host, proto=proto)
         if settings.environment == "production":
             raise HTTPException(status_code=403, detail="Invalid signature")

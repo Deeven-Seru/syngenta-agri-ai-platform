@@ -301,8 +301,8 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Key: (language, device, district)
     message_cache = {}
 
-    # Stream targets to avoid memory limits
-    cursor = col_model_scores().find({"campaign_id": campaign_id})
+    # Stream targets to avoid memory limits, sorted by receptivity_score
+    cursor = col_model_scores().find({"campaign_id": campaign_id}).sort([("receptivity_score", -1)])
     
     async def send_one(target, grower_map):
         nonlocal sent_count, errors

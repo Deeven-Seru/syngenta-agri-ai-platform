@@ -3,11 +3,12 @@ RAG Service — Grounded Agricultural Answers
 - Uses MongoDB Atlas Vector Search for retrieval.
 - Uses Groq for low-latency conversational generation.
 """
-from groq import Groq
+from groq import AsyncGroq
 from google import genai
 from config import get_settings
 from database import col_knowledge_vectors, col_growers
 import structlog
+import asyncio
 
 logger = structlog.get_logger()
 
@@ -92,7 +93,7 @@ async def search_knowledge(query_embedding: list[float], district: str, grower_i
 
 async def generate_grounded_answer(phone_number: str, question: str) -> str:
     settings = get_settings()
-    groq_client = Groq(api_key=settings.groq_api_key)
+    groq_client = AsyncGroq(api_key=settings.groq_api_key)
     
     # Normalize phone: strip '+' and 'whatsapp:'
     clean_phone = phone_number.replace("whatsapp:", "").replace("+", "")
@@ -144,8 +145,7 @@ INSTRUCTIONS:
 """
 
     try:
-        chat_completion = await asyncio.to_thread(
-            groq_client.chat.completions.create,
+        chat_completion = await groq_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": "You are a professional Syngenta Agri-AI assistant."},
                 {"role": "user", "content": prompt}
