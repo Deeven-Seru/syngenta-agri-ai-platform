@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import structlog
 
-from database import connect_db, close_db
+from database import connect_db, close_db, create_indexes
 from routers import campaigns, growers, analytics, weather, content, system, voice, whatsapp, autonomous
 
 logger = structlog.get_logger()
@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🌱 Syngenta Agri-AI Platform starting...")
     await connect_db()
+    await create_indexes()
     yield
     # Shutdown
     await close_db()

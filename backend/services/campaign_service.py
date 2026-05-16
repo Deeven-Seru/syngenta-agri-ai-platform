@@ -20,7 +20,10 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     
     # Get campaign details for product name
     campaign = await col_campaigns().find_one({"_id": campaign_id})
-    product = campaign.get("product", "Syngenta Solution") if campaign else "Syngenta Solution"
+    if not campaign:
+        logger.error("Campaign not found for dispatch", campaign_id=campaign_id)
+        return
+    product = campaign.get("product", "Syngenta Solution")
     
     # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
     semaphore = asyncio.Semaphore(10)
@@ -31,6 +34,13 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Cache for generated messages to avoid redundant Gemini calls
     # Key: (language, device, district)
     message_cache = {}
+    
+    # Pre-fetch weather for all districts in the campaign to avoid redundant API calls
+    weather_cache = {}
+    unique_districts = await col_model_scores().distinct("district", {"campaign_id": campaign_id})
+    if unique_districts:
+        from services.weather_service import get_bulk_district_weather
+        weather_cache = await get_bulk_district_weather(unique_districts)
 
     # Stream targets to avoid memory limits, sorted by receptivity_score
     cursor = col_model_scores().find({"campaign_id": campaign_id}).sort([("receptivity_score", -1)])
@@ -69,8 +79,8 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
                 if cache_key in message_cache:
                     msg_text = message_cache[cache_key]
                 else:
-                    # Generate on-the-fly
-                    weather = await get_district_weather(district)
+                    # Use pre-fetched weather
+                    weather = weather_cache.get(district, {})
                     weather_ctx = weather.get("weather_context", "")
                     
                     if device == "smartphone":
@@ -125,17 +135,24 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
             growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
             batch_grower_map = {g["_id"]: g for g in growers}
             
-            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+            if not batch_grower_map:
+                logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
+            else:
+                await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
             batch = []
     
     if batch:
         batch_grower_ids = list(set(t.get("grower_id") for t in batch if t.get("grower_id")))
         growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
         batch_grower_map = {g["_id"]: g for g in growers}
-        await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+        
+        if not batch_grower_map:
+            logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
+        else:
+            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
-    # Final updates with Native Datetime
-    now = datetime.now(timezone.utc)
+    # Final updates with ISO string timestamps
+    now = datetime.now(timezone.utc).isoformat()
     status_update = {
         "status": "launched", 
         "launched_at": now,
@@ -146,5 +163,5 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     await col_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})
     
     # Sync update for autonomous tracker if applicable
-    if campaign and campaign.get("is_autonomous"):
+    if campaign.get("is_autonomous"):
         await col_autonomous_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})

@@ -29,16 +29,15 @@ THRESHOLDS = {
 async def check_pest_anomaly(district: str, current_data: dict) -> bool:
     """Check if Pest Alert criteria met consistently over last 48 hours."""
     now = datetime.now(timezone.utc)
-    lookback = now - timedelta(hours=48)
+    lookback_dt = now - timedelta(hours=48)
+    lookback = lookback_dt.isoformat()
     
     # Criteria: Humidity > 85 and Temp 20-30
     if not (current_data.get("humidity_pct", 0) > THRESHOLDS["PEST_HUMIDITY"] and 
             THRESHOLDS["PEST_TEMP_MIN"] <= current_data.get("temperature_c", 0) <= THRESHOLDS["PEST_TEMP_MAX"]):
         return False
         
-    # Check history: Are there any breaches of the condition in the last 48h?
-    # For demo/hackathon, we'll check if there's at least one record from ~48h ago that also meets it,
-    # or just that NO record in history fails it.
+    # Check history: Are there any failures of the condition in the last 48h?
     history_cursor = col_weather_history().find({
         "district": district,
         "timestamp": {"$gte": lookback},
@@ -52,17 +51,18 @@ async def check_pest_anomaly(district: str, current_data: dict) -> bool:
     if fails:
         return False
 
-    # Ensure at least one historical record exists to confirm the 48h trend
-    has_history = await col_weather_history().find_one({
+    # Ensure sufficient data density (at least 3 records over 48h) to confirm trend
+    history_count = await col_weather_history().count_documents({
         "district": district,
-        "timestamp": {"$gte": lookback, "$lt": now - timedelta(minutes=15)}
+        "timestamp": {"$gte": lookback}
     })
-    return has_history is not None
+    return history_count >= 3
 
 async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     """Check if Heat Stress criteria met consistently over last 3 days."""
     now = datetime.now(timezone.utc)
-    lookback = now - timedelta(days=3)
+    lookback_dt = now - timedelta(days=3)
+    lookback = lookback_dt.isoformat()
     
     if current_data.get("temperature_c", 0) <= THRESHOLDS["HEAT_STRESS_TEMP"]:
         return False
@@ -77,12 +77,12 @@ async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     if fails:
         return False
 
-    # Ensure at least one historical record exists to confirm the 3-day trend
-    has_history = await col_weather_history().find_one({
+    # Ensure sufficient data density (at least 3 records over 3 days) to confirm trend
+    history_count = await col_weather_history().count_documents({
         "district": district,
-        "timestamp": {"$gte": lookback, "$lt": now - timedelta(minutes=15)}
+        "timestamp": {"$gte": lookback}
     })
-    return has_history is not None
+    return history_count >= 3
 
 async def scan_for_anomalies(background_tasks: BackgroundTasks):
     """
@@ -96,6 +96,7 @@ async def scan_for_anomalies(background_tasks: BackgroundTasks):
     weather_map = await get_bulk_district_weather(all_districts)
     
     now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     history_docs = []
     
     for district, data in weather_map.items():
@@ -105,7 +106,7 @@ async def scan_for_anomalies(background_tasks: BackgroundTasks):
         # Prepare history doc
         history_docs.append({
             "district": district,
-            "timestamp": now,
+            "timestamp": now_iso,
             "temp": data.get("temperature_c"),
             "humidity": data.get("humidity_pct"),
             "precip": data.get("precipitation_mm")
@@ -152,7 +153,7 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     existing = await col_autonomous_campaigns().find_one({
         "district": district,
         "anomaly_type": anomaly_type,
-        "triggered_at": {"$gte": today_start}
+        "triggered_at": {"$gte": today_start.isoformat()}
     })
     
     if existing:
@@ -167,8 +168,10 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         logger.warning("No growers found in district", district=district)
         return
 
-    # 2. Record Campaign (Consistent UTC ID)
-    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{str(uuid.uuid4())[:8]}"
+    # 2. Record Campaign (Consistent UTC ID and Timestamp)
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{now.strftime('%Y%m%d')}_{str(uuid.uuid4())[:8]}"
     
     # Determine anomaly-specific metadata
     crop = "General"
@@ -181,14 +184,14 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     elif anomaly_type == "Frost Warning":
         product = "Syngenta Frost Protection"
 
-    # Create record in col_campaigns so dispatch logic works correctly (Native Datetime)
+    # Create record in col_campaigns so dispatch logic works correctly (ISO string)
     campaign_doc = {
         "_id": campaign_id,
         "name": f"Autonomous: {anomaly_type} ({district})",
         "crop": crop,
         "product": product,
         "status": "launching",
-        "created_at": datetime.now(timezone.utc),
+        "created_at": now_iso,
         "total_targets": grower_count,
         "is_autonomous": True
     }
@@ -199,7 +202,7 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         "_id": campaign_id,
         "district": district,
         "anomaly_type": anomaly_type,
-        "triggered_at": datetime.now(timezone.utc),
+        "triggered_at": now_iso,
         "status": "launching",
         "target_count": grower_count,
         "product": product,
