@@ -69,7 +69,7 @@ async def vectorize_inventory():
     
     # Get retailer details for location context
     retailer_cursor = col_retailers().find({})
-    retailers = await retailer_cursor.to_list(length=None)
+    retailers = await retailer_cursor.to_list(length=5000)
     retailer_map = {r["_id"]: r for r in retailers}
     
     chunks = []

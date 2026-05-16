@@ -25,8 +25,8 @@ async def validate_twilio_request(request: Request):
     
     if not validator.validate(url, form_data, signature):
         logger.error("Invalid Twilio signature", url=url)
-        # Pass for local/ngrok testing
-        pass
+        if settings.environment == "production":
+            raise HTTPException(status_code=403, detail="Invalid signature")
 
 @router.post("/incoming")
 async def handle_whatsapp_incoming(request: Request):

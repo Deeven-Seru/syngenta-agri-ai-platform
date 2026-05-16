@@ -27,9 +27,8 @@ async def validate_twilio_request(request: Request):
     
     if not validator.validate(url, form_data, signature):
         logger.error("Invalid Twilio signature", url=url)
-        # For hackathon/local testing with ngrok, we might want to skip or just warn
-        # raise HTTPException(status_code=403, detail="Invalid signature")
-        pass
+        if settings.environment == "production":
+            raise HTTPException(status_code=403, detail="Invalid signature")
 
 @router.post("/incoming")
 async def handle_voice_incoming(request: Request):

@@ -10,8 +10,9 @@ GET  /api/campaigns/{id}/targets  → Get ranked target growers
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
+import asyncio
 
 from database import col_growers, col_campaigns, col_model_scores, col_inventory
 from services.receptivity_service import score_growers
@@ -196,6 +197,11 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
     messages = []
     seen_keys = set()
 
+    # Bulk fetch grower details for those without device_type to avoid N+1 queries
+    needed_ids = list(set(t.get("grower_id") for t in targets if not t.get("device_type")))
+    growers_list = await col_growers().find({"_id": {"$in": needed_ids}}).to_list(length=len(needed_ids))
+    grower_map = {g["_id"]: g for g in growers_list}
+
     for target in targets:
         lang = target.get("language", "Hindi")
         
@@ -204,7 +210,7 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
         grower_id = target.get("grower_id")
         
         if not device:
-            g_doc = await col_growers().find_one({"_id": grower_id})
+            g_doc = grower_map.get(grower_id)
             device = g_doc.get("device_type", "smartphone") if g_doc else "smartphone"
         
         key = f"{lang}:{device}"
@@ -285,8 +291,8 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
     errors = 0
 
     # Bulk fetch grower details to avoid N+1 queries
-    grower_ids = [t.get("grower_id") for t in targets]
-    growers = await col_growers().find({"_id": {"$in": grower_ids}}).to_list(length=None)
+    grower_ids = list(set(t.get("grower_id") for t in targets))
+    growers = await col_growers().find({"_id": {"$in": grower_ids}}).to_list(length=len(grower_ids))
     grower_map = {g["_id"]: g for g in growers}
 
     for target in targets:
@@ -307,13 +313,15 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
 
         try:
             if device == "smartphone":
-                twilio_client.messages.create(
+                await asyncio.to_thread(
+                    twilio_client.messages.create,
                     from_=settings.twilio_whatsapp_from,
                     body=msg_text,
                     to=f"whatsapp:{phone}"
                 )
             else:
-                twilio_client.calls.create(
+                await asyncio.to_thread(
+                    twilio_client.calls.create,
                     from_=settings.twilio_phone_number,
                     to=phone,
                     twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
@@ -327,7 +335,7 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, targets
         {"_id": campaign_id},
         {"$set": {
             "status": "launched", 
-            "launched_at": datetime.utcnow().isoformat(),
+            "launched_at": datetime.now(timezone.utc).isoformat(),
             "sent_count": sent_count,
             "error_count": errors
         }}
@@ -348,7 +356,7 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     # Get ALL scored targets (removing the 100 limit bug)
-    targets = await col_model_scores().find({"campaign_id": campaign_id}).to_list(length=None)
+    targets = await col_model_scores().find({"campaign_id": campaign_id}).to_list(length=10000)
     
     if not targets:
         raise HTTPException(status_code=400, detail="No targets found for this campaign")
