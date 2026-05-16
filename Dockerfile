@@ -14,9 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend source
 COPY backend/ .
 
-# Copy ML model artifacts (trained model)
-COPY ml/receptivity_model.pkl ./ml/receptivity_model.pkl 2>/dev/null || true
-COPY ml/label_encoders.pkl ./ml/label_encoders.pkl 2>/dev/null || true
+# Ensure ml directory exists and copy artifacts
+RUN mkdir -p ml
+COPY ml/receptivity_model.pkl ./ml/ 2>/dev/null || true
+COPY ml/label_encoders.pkl ./ml/ 2>/dev/null || true
 
 # Set environment
 ENV PORT=8080

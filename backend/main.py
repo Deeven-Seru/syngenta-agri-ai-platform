@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import structlog
 
 from database import connect_db, close_db
-from routers import campaigns, growers, analytics, weather, content, system
+from routers import campaigns, growers, analytics, weather, content, system, voice, whatsapp
 
 logger = structlog.get_logger()
 
@@ -48,6 +48,8 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"]
 app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])
 app.include_router(content.router, prefix="/api/content", tags=["Content Generation"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(voice.router, prefix="/api/voice", tags=["Voice IVR"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["WhatsApp Chat"])
 
 
 @app.get("/", tags=["Health"])

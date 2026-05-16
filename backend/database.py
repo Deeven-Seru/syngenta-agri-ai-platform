@@ -63,3 +63,6 @@ def col_funnel():
 
 def col_model_scores():
     return get_db()["model_scores"]
+
+def col_knowledge_vectors():
+    return get_db()["knowledge_vectors"]
