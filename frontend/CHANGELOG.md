@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/compare/frontend-v0.5.0...frontend-v0.6.0) (2026-05-16)
+
+
+### 🦁 New Features
+
+* Add GitHub Pages deployment workflow for frontend ([a2e4897](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/commit/a2e4897f40d5ec542456e27336a21cb865a28c3f))
+
 ## [0.5.0](https://github.com/Deeven-Seru/syngenta-agri-ai-platform/compare/frontend-v0.4.0...frontend-v0.5.0) (2026-05-16)
 
 
