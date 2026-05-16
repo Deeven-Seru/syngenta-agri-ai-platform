@@ -9,6 +9,11 @@
       "release-type": "python",
       "package-name": "syngenta-agri-ai-backend",
       "component": "backend"
+    },
+    ".": {
+      "release-type": "simple",
+      "package-name": "syngenta-agri-ai-platform",
+      "component": "platform"
     }
   },
   "plugins": [
