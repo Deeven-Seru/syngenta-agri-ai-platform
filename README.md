@@ -146,7 +146,9 @@ npm run dev
 ---
 
 <p align="center">Built for the <strong>Syngenta Hackathon 2026</strong></p>
-<p align="center">
-  <a href="https://iconscout.com/lottie-animations/cute-cat" class="text-underline font-size-sm" target="_blank">Cute Cat</a> by <a href="https://iconscout.com/contributors/rejuve" class="text-underline font-size-sm" target="_blank">Rejuv</a>
-</p>
+
+<div align="right">
+  <img src="https://lottie.host/d4c21466-1d9f-48fb-9e55-00f258af0659/qinzUWv50g.gif" alt="Cute Cat" width="120" />
+</div>
+
 
