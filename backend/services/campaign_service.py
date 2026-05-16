@@ -156,5 +156,5 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     await col_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})
     
     # Sync update for autonomous tracker if applicable
-    if campaign and campaign.get("is_autonomous"):
+    if campaign.get("is_autonomous"):
         await col_autonomous_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})

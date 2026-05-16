@@ -112,9 +112,13 @@ async def scan_for_anomalies():
     if history_docs:
         await col_weather_history().insert_many(history_docs)
 
-    # Check anomalies for all districts concurrently
+    # Check anomalies for all districts concurrently with exception handling
     tasks = [process_district_anomalies(district, data) for district, data in weather_map.items() if "error" not in data]
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for district, res in zip(weather_map.keys(), results):
+        if isinstance(res, Exception):
+            logger.error("District anomaly processing failed", district=district, error=str(res))
 
     logger.info("✅ Weather Watcher scan complete.")
 
@@ -156,9 +160,10 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         logger.warning("No growers found in district", district=district)
         return
 
-    # 2. Record Campaign (Consistent UTC ID)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{str(uuid.uuid4())[:8]}"
+    # 2. Record Campaign (Consistent UTC ID and Timestamp)
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{now.strftime('%Y%m%d')}_{str(uuid.uuid4())[:8]}"
     
     # Determine anomaly-specific metadata
     crop = "General"

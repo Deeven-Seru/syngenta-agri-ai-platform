@@ -28,6 +28,29 @@ async def close_db():
         print("MongoDB connection closed")
 
 
+async def create_indexes():
+    """Ensure critical indexes are present for performance and scalability."""
+    db = get_db()
+    
+    # weather_history: { "district": 1, "timestamp": -1 }
+    await db["weather_history"].create_index([("district", 1), ("timestamp", -1)])
+    
+    # autonomous_campaigns: { "district": 1, "anomaly_type": 1, "triggered_at": -1 }
+    await db["autonomous_campaigns"].create_index([
+        ("district", 1), 
+        ("anomaly_type", 1), 
+        ("triggered_at", -1)
+    ])
+    
+    # model_scores: { "campaign_id": 1, "receptivity_score": -1 }
+    await db["model_scores"].create_index([("campaign_id", 1), ("receptivity_score", -1)])
+    
+    # growers: { "district": 1 }
+    await db["growers"].create_index([("district", 1)])
+    
+    print("✅ MongoDB Indexes verified")
+
+
 def get_db():
     settings = get_settings()
     return _client[settings.mongodb_db_name]
