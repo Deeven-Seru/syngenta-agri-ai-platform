@@ -25,6 +25,9 @@ export default function Campaigns() {
     min_receptivity_tier: 'medium',
     device_filter: 'smartphone',
     max_targets: 500,
+    min_farm_size: 0,
+    target_language: '',
+    offline_only: false,
   });
   const [creating, setCreating]         = useState(false);
   const [result, setResult]             = useState<any>(null);
@@ -217,6 +220,45 @@ export default function Campaigns() {
                         <option value="all">All devices</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="form-row mb-4">
+                    <div className="form-group">
+                      <label className="form-label">Min. Farm Size (Acres)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={form.min_farm_size}
+                        onChange={e => setForm({ ...form, min_farm_size: parseFloat(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Target Language</label>
+                      <select
+                        className="form-select"
+                        value={form.target_language}
+                        onChange={e => setForm({ ...form, target_language: e.target.value })}
+                      >
+                        <option value="">Any Language</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Punjabi">Punjabi</option>
+                        <option value="Marathi">Marathi</option>
+                        <option value="Gujarati">Gujarati</option>
+                        <option value="Kannada">Kannada</option>
+                        <option value="Bengali">Bengali</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.offline_only}
+                        onChange={e => setForm({ ...form, offline_only: e.target.checked })}
+                      />
+                      <span className="form-label mb-0">Target non-offline attendees only</span>
+                    </label>
                   </div>
 
                   <div className="form-group mb-4">

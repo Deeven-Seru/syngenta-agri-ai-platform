@@ -1,23 +1,33 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import L from 'leaflet';
+import DeckGL from '@deck.gl/react';
+import { HexagonLayer } from '@deck.gl/aggregation-layers';
+import { Map } from 'react-map-gl/maplibre';
 import { api } from '../api';
 import { 
-  IconBarChart, IconMap, IconGlobe, IconTarget,
-  IconArrowUp, IconFilter, IconRefresh
+  IconBarChart, IconMap, IconGlobe,
+  IconRefresh
 } from '../icons';
 
-// Sophisticated mapping of India districts to coordinates for the demo
+// Sophisticated mapping of India districts to coordinates
 const DISTRICT_COORDS: Record<string, [number, number]> = {
-  'Ambala': [30.3782, 76.7767], 'Karnal': [29.6857, 76.9907], 'Bhatinda': [30.2110, 74.9455],
-  'Patiala': [30.3398, 76.3869], 'Ludhiana': [30.9010, 75.8573], 'Nagpur': [21.1458, 79.0882],
-  'Pune': [18.5204, 73.8567], 'Nashik': [19.9975, 73.7898], 'Ahmedabad': [23.0225, 72.5714],
-  'Rajkot': [22.3039, 70.8022], 'Kurnool': [15.8281, 78.0373], 'Guntur': [16.3067, 80.4365],
-  'Indore': [22.7196, 75.8577], 'Bhopal': [23.2599, 77.4126], 'Patna': [25.5941, 85.1376],
-  'Meerut': [28.9845, 77.7064], 'Kanpur': [26.4499, 80.3319], 'Jaipur': [26.9124, 75.7873],
+  'Ambala': [76.7767, 30.3782], 'Karnal': [76.9907, 29.6857], 'Bhatinda': [74.9455, 30.2110],
+  'Patiala': [76.3869, 30.3398], 'Ludhiana': [75.8573, 30.9010], 'Nagpur': [79.0882, 21.1458],
+  'Pune': [73.8567, 18.5204], 'Nashik': [73.7898, 19.9975], 'Ahmedabad': [72.5714, 23.0225],
+  'Rajkot': [70.8022, 22.3039], 'Kurnool': [78.0373, 15.8281], 'Guntur': [80.4365, 16.3067],
+  'Indore': [75.8577, 22.7196], 'Bhopal': [77.4126, 23.2599], 'Patna': [85.1376, 25.5941],
+  'Meerut': [77.7064, 28.9845], 'Kanpur': [80.3319, 26.4499], 'Jaipur': [75.7873, 26.9124],
+};
+
+const INITIAL_VIEW_STATE = {
+  longitude: 78.9629,
+  latitude: 20.5937,
+  zoom: 4,
+  pitch: 45,
+  bearing: 0
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -41,67 +51,55 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function Analytics() {
   const [products, setProducts]   = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
+  const [mapData, setMapData]     = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
-  const mapRef = useRef<L.Map | null>(null);
-  const mapContainer = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    Promise.all([api.getTopProducts(), api.getDistrictHeatmap()])
-      .then(([p, d]) => {
+    Promise.all([api.getTopProducts(), api.getDistrictHeatmap(), api.getMapData()])
+      .then(([p, d, m]) => {
         setProducts(p.data || []);
         setDistricts(d.districts || []);
+        
+        // Process data for Deck.gl
+        const points = (m.data || []).map((item: any) => {
+            const coords = DISTRICT_COORDS[item.district];
+            if (!coords) return null;
+            // Create multiple points based on 'count' to show density in HexagonLayer
+            return {
+                COORDINATES: coords,
+                weight: item.farm_size,
+                district: item.district
+            };
+        }).filter(Boolean);
+        
+        setMapData(points);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (loading || !districts.length || !mapContainer.current) return;
-
-    if (!mapRef.current) {
-      mapRef.current = L.map(mapContainer.current, {
-        center: [22.9734, 78.6569], // Central India
-        zoom: 5,
-        zoomControl: false,
-        attributionControl: false,
-      });
-
-      // CartoDB Dark Matter tiles - Sleek, monochromatic, sophisticated
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 20
-      }).addTo(mapRef.current);
-    }
-
-    // Add markers for districts
-    districts.forEach(d => {
-      const coords = DISTRICT_COORDS[d.district];
-      if (coords && mapRef.current) {
-        const radius = Math.sqrt(d.grower_count) * 2;
-        L.circleMarker(coords, {
-          radius: radius,
-          fillColor: 'var(--green-hi)',
-          fillOpacity: 0.5,
-          color: 'var(--green-hi)',
-          weight: 1,
-        }).addTo(mapRef.current)
-          .bindPopup(`
-            <div class="map-popup">
-              <strong>${d.district}</strong><br/>
-              ${d.grower_count} Growers<br/>
-              ${d.smartphone_pct}% SmartPhones
-            </div>
-          `);
-      }
-    });
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, [loading, districts]);
+  const layers = [
+    new HexagonLayer({
+      id: 'heatmap',
+      data: mapData,
+      getPosition: (d: any) => d.COORDINATES,
+      getElevationWeight: (d: any) => d.weight,
+      elevationScale: 1000,
+      extruded: true,
+      radius: 20000,         
+      upperPercentile: 100,
+      coverage: 1,
+      pickable: true,
+      colorRange: [
+        [64, 145, 108],
+        [82, 183, 136],
+        [116, 198, 157],
+        [149, 213, 178],
+        [183, 228, 199],
+        [216, 243, 219]
+      ]
+    })
+  ];
 
   if (loading) return (
     <div className="loading-page">
@@ -126,21 +124,27 @@ export default function Analytics() {
         <div className="grid-7-5 mb-6">
           <div className="card">
             <div className="card-head">
-              <div className="card-label"><IconMap size={13} /> Geospatial Penetration Heatmap</div>
-              <div className="badge badge-green">Live from MongoDB</div>
+              <div className="card-label"><IconMap size={13} /> 3D Density Map (Deck.gl + Carto)</div>
+              <div className="badge badge-green">3D Projection Live</div>
             </div>
-            <div style={{ padding: 0, position: 'relative' }}>
-              <div ref={mapContainer} style={{ height: 400, width: '100%', borderRadius: '0 0 12px 12px' }} />
-              <div className="map-overlay-legend">
+            <div style={{ padding: 0, position: 'relative', height: 400, overflow: 'hidden', borderRadius: '0 0 12px 12px' }}>
+                <DeckGL
+                    initialViewState={INITIAL_VIEW_STATE}
+                    controller={true}
+                    layers={layers}
+                    getTooltip={({object}) => object && `Density: ${object.points.length} Districts`}
+                >
+                    <Map 
+                        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                    />
+                </DeckGL>
+              <div className="map-overlay-legend" style={{ zIndex: 10 }}>
                 <div className="text-3 mb-2" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legend</div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green-hi)' }} />
-                  <span style={{ fontSize: 11 }}>Active Target Zone</span>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#40916c' }} />
+                  <span style={{ fontSize: 11 }}>Density Zone</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(45, 106, 79, 0.2)', border: '1px solid var(--green-hi)' }} />
-                  <span style={{ fontSize: 11 }}>Emerging Market</span>
-                </div>
+                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Pitch to view 3D (Right-click + drag)</div>
               </div>
             </div>
           </div>
