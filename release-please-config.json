@@ -2,7 +2,18 @@
   "packages": {
     "frontend": {
       "release-type": "node",
-      "package-name": "syngenta-agri-ai"
+      "package-name": "syngenta-agri-ai-frontend",
+      "component": "frontend"
+    },
+    "backend": {
+      "release-type": "python",
+      "package-name": "syngenta-agri-ai-backend",
+      "component": "backend"
     }
-  }
+  },
+  "plugins": [
+    {
+      "type": "sentence-case"
+    }
+  ]
 }
