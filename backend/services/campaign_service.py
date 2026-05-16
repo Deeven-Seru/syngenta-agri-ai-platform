@@ -135,14 +135,21 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
             growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
             batch_grower_map = {g["_id"]: g for g in growers}
             
-            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+            if not batch_grower_map:
+                logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
+            else:
+                await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
             batch = []
     
     if batch:
         batch_grower_ids = list(set(t.get("grower_id") for t in batch if t.get("grower_id")))
         growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
         batch_grower_map = {g["_id"]: g for g in growers}
-        await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+        
+        if not batch_grower_map:
+            logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
+        else:
+            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
     # Final updates with ISO string timestamps
     now = datetime.now(timezone.utc).isoformat()

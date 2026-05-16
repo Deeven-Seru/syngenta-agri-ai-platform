@@ -3,13 +3,16 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import ContentGen from './pages/ContentGen';
 import Analytics from './pages/Analytics';
+import WeatherLive from './pages/WeatherLive';
+import GrowerSegments from './pages/GrowerSegments';
+import ModelScopes from './pages/ModelScopes';
 import {
   IconGrid, IconTarget, IconEdit, IconBarChart,
   IconLeaf, IconDatabase, IconCpu, IconSun,
 } from './icons';
 import './index.css';
 
-type Page = 'dashboard' | 'campaigns' | 'content' | 'analytics';
+type Page = 'dashboard' | 'campaigns' | 'content' | 'analytics' | 'weather' | 'segments' | 'models';
 
 const NAV: { id: Page; label: string; Icon: React.FC<any> }[] = [
   { id: 'dashboard',  label: 'Overview',           Icon: IconGrid     },
@@ -18,10 +21,10 @@ const NAV: { id: Page; label: string; Icon: React.FC<any> }[] = [
   { id: 'analytics',  label: 'Analytics',           Icon: IconBarChart },
 ];
 
-const SYS = [
-  { label: 'Weather Live',     Icon: IconSun      },
-  { label: 'Grower Segments',  Icon: IconDatabase },
-  { label: 'Model Scores',     Icon: IconCpu      },
+const SYS: { id: Page; label: string; Icon: React.FC<any> }[] = [
+  { id: 'weather',   label: 'Weather Live',     Icon: IconSun      },
+  { id: 'segments',  label: 'Grower Segments',  Icon: IconDatabase },
+  { id: 'models',    label: 'Model Scores',     Icon: IconCpu      },
 ];
 
 export default function App() {
@@ -56,8 +59,12 @@ export default function App() {
 
           <div className="nav-divider" />
           <div className="nav-group-label">System</div>
-          {SYS.map(({ label, Icon }) => (
-            <div key={label} className="nav-item" style={{ opacity: 0.55, cursor: 'default' }}>
+          {SYS.map(({ id, label, Icon }) => (
+            <div
+              key={id}
+              className={`nav-item ${page === id ? 'active' : ''}`}
+              onClick={() => setPage(id)}
+            >
               <Icon size={15} />
               {label}
             </div>
@@ -88,6 +95,9 @@ export default function App() {
           {page === 'campaigns'  && <Campaigns />}
           {page === 'content'    && <ContentGen />}
           {page === 'analytics'  && <Analytics />}
+          {page === 'weather'    && <WeatherLive />}
+          {page === 'segments'   && <GrowerSegments />}
+          {page === 'models'     && <ModelScopes />}
         </div>
       </main>
     </div>

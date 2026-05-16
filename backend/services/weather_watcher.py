@@ -28,14 +28,15 @@ THRESHOLDS = {
 async def check_pest_anomaly(district: str, current_data: dict) -> bool:
     """Check if Pest Alert criteria met consistently over last 48 hours."""
     now = datetime.now(timezone.utc)
-    lookback = (now - timedelta(hours=48)).isoformat()
+    lookback_dt = now - timedelta(hours=48)
+    lookback = lookback_dt.isoformat()
     
     # Criteria: Humidity > 85 and Temp 20-30
     if not (current_data.get("humidity_pct", 0) > THRESHOLDS["PEST_HUMIDITY"] and 
             THRESHOLDS["PEST_TEMP_MIN"] <= current_data.get("temperature_c", 0) <= THRESHOLDS["PEST_TEMP_MAX"]):
         return False
         
-    # Check history: Are there any breaches of the condition in the last 48h?
+    # Check history: Are there any failures of the condition in the last 48h?
     history_cursor = col_weather_history().find({
         "district": district,
         "timestamp": {"$gte": lookback},
@@ -49,17 +50,18 @@ async def check_pest_anomaly(district: str, current_data: dict) -> bool:
     if fails:
         return False
 
-    # Ensure at least one historical record exists to confirm the 48h trend
-    has_history = await col_weather_history().find_one({
+    # Ensure sufficient data density (at least 3 records over 48h) to confirm trend
+    history_count = await col_weather_history().count_documents({
         "district": district,
-        "timestamp": {"$gte": lookback, "$lt": (now - timedelta(minutes=15)).isoformat()}
+        "timestamp": {"$gte": lookback}
     })
-    return has_history is not None
+    return history_count >= 3
 
 async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     """Check if Heat Stress criteria met consistently over last 3 days."""
     now = datetime.now(timezone.utc)
-    lookback = (now - timedelta(days=3)).isoformat()
+    lookback_dt = now - timedelta(days=3)
+    lookback = lookback_dt.isoformat()
     
     if current_data.get("temperature_c", 0) <= THRESHOLDS["HEAT_STRESS_TEMP"]:
         return False
@@ -74,12 +76,12 @@ async def check_heat_anomaly(district: str, current_data: dict) -> bool:
     if fails:
         return False
 
-    # Ensure at least one historical record exists to confirm the 3-day trend
-    has_history = await col_weather_history().find_one({
+    # Ensure sufficient data density (at least 3 records over 3 days) to confirm trend
+    history_count = await col_weather_history().count_documents({
         "district": district,
-        "timestamp": {"$gte": lookback, "$lt": (now - timedelta(minutes=15)).isoformat()}
+        "timestamp": {"$gte": lookback}
     })
-    return has_history is not None
+    return history_count >= 3
 
 async def scan_for_anomalies():
     """
