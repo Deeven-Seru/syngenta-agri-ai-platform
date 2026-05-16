@@ -7,7 +7,7 @@ Campaign Dispatch Service — Twilio Messaging & IVR
 import asyncio
 from datetime import datetime, timezone
 import structlog
-from database import col_growers, col_campaigns, col_model_scores
+from database import col_growers, col_campaigns, col_model_scores, col_autonomous_campaigns
 from services.content_generator import generate_whatsapp_message, generate_voice_script
 from services.weather_service import get_district_weather
 
@@ -120,8 +120,8 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     async for target in cursor:
         batch.append(target)
         if len(batch) >= 100:
-            # Bulk fetch growers for this batch
-            batch_grower_ids = list(set(t.get("grower_id") for t in batch))
+            # Bulk fetch growers for this batch (filtering None)
+            batch_grower_ids = list(set(t.get("grower_id") for t in batch if t.get("grower_id")))
             growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
             batch_grower_map = {g["_id"]: g for g in growers}
             
@@ -129,17 +129,22 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
             batch = []
     
     if batch:
-        batch_grower_ids = list(set(t.get("grower_id") for t in batch))
+        batch_grower_ids = list(set(t.get("grower_id") for t in batch if t.get("grower_id")))
         growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
         batch_grower_map = {g["_id"]: g for g in growers}
         await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
-    await col_campaigns().update_one(
-        {"_id": campaign_id},
-        {"$set": {
-            "status": "launched", 
-            "launched_at": datetime.now(timezone.utc).isoformat(),
-            "sent_count": sent_count,
-            "error_count": errors
-        }}
-    )
+    # Final updates with Native Datetime
+    now = datetime.now(timezone.utc)
+    status_update = {
+        "status": "launched", 
+        "launched_at": now,
+        "sent_count": sent_count,
+        "error_count": errors
+    }
+    
+    await col_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})
+    
+    # Sync update for autonomous tracker if applicable
+    if campaign and campaign.get("is_autonomous"):
+        await col_autonomous_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})

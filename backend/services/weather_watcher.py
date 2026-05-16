@@ -158,7 +158,7 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         return
 
     # 2. Record Campaign (Consistent UTC ID)
-    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{str(uuid.uuid4())[:4]}"
+    campaign_id = f"AUTO_{anomaly_type.replace(' ', '_').upper()}_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{str(uuid.uuid4())[:8]}"
     
     # Determine anomaly-specific metadata
     crop = "General"
@@ -171,14 +171,14 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     elif anomaly_type == "Frost Warning":
         product = "Syngenta Frost Protection"
 
-    # Create record in col_campaigns so dispatch logic works correctly
+    # Create record in col_campaigns so dispatch logic works correctly (Native Datetime)
     campaign_doc = {
         "_id": campaign_id,
         "name": f"Autonomous: {anomaly_type} ({district})",
         "crop": crop,
         "product": product,
         "status": "launching",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
         "total_targets": grower_count,
         "is_autonomous": True
     }
@@ -200,13 +200,39 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
     }
     await col_autonomous_campaigns().insert_one(auto_doc)
 
-    # 3. Prepare targets and dispatch (Reuse AI Scoring)
-    # Stream growers to score them with the actual model
+    # 3. Prepare targets and dispatch (Reuse AI Scoring in Batches)
     growers_cursor = col_growers().find({"district": district})
     
-    # We fetch all to score them
-    all_growers = await growers_cursor.to_list(length=grower_count)
-    scored_growers = score_growers(all_growers, product, crop)
+    # Process and score in chunks to balance memory and event loop responsiveness
+    batch_size = 2000
+    chunk = []
+    async for g in growers_cursor:
+        chunk.append(g)
+        if len(chunk) >= batch_size:
+            await _score_and_insert_batch(campaign_id, chunk, product, crop, district)
+            chunk = []
+            
+    if chunk:
+        await _score_and_insert_batch(campaign_id, chunk, product, crop, district)
+
+    settings = get_settings()
+    # Offload to background with error logging
+    dispatch_task = asyncio.create_task(dispatch_twilio_messages(campaign_id, crop, settings))
+    
+    def on_task_done(t):
+        try:
+            t.result()
+        except Exception as e:
+            logger.error("Autonomous dispatch task failed", campaign_id=campaign_id, error=str(e))
+            
+    dispatch_task.add_done_callback(on_task_done)
+    
+    logger.info("🚀 Autonomous Campaign Dispatched", id=campaign_id, targets=grower_count)
+
+async def _score_and_insert_batch(campaign_id: str, growers: list, product: str, crop: str, district: str):
+    """Offload scoring to a thread pool and batch insert results."""
+    # Score growers (CPU intensive, offload to thread)
+    scored_growers = await asyncio.to_thread(score_growers, growers, product, crop)
     
     score_docs = [{
         "campaign_id": campaign_id,
@@ -218,12 +244,5 @@ async def trigger_autonomous_campaign(district: str, anomaly_type: str, weather_
         "district": district
     } for g in scored_growers]
     
-    # Batch insert scores
-    for i in range(0, len(score_docs), 1000):
-        await col_model_scores().insert_many(score_docs[i:i+1000])
-
-    settings = get_settings()
-    # Offload to background
-    asyncio.create_task(dispatch_twilio_messages(campaign_id, crop, settings))
-    
-    logger.info("🚀 Autonomous Campaign Dispatched", id=campaign_id, targets=grower_count)
+    if score_docs:
+        await col_model_scores().insert_many(score_docs)
