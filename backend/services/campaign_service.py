@@ -138,7 +138,7 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
     # Final updates with Native Datetime
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).isoformat()
     status_update = {
         "status": "launched", 
         "launched_at": now,
