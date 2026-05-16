@@ -12,7 +12,7 @@ To bridge the gap between complex agricultural science and the local grower thro
 - **Vision AI Diagnostics**: Multimodal pest and disease identification for instant field support.
 
 ## 🛠️ Technical Architecture
-- **Frontend**: React 18, Vite, Recharts, Leaflet.css.
+- **Frontend**: React 19, Vite, Recharts, Leaflet.css.
 - **Backend**: FastAPI (Python 3.11+), Pydantic v2.
 - **Database**: MongoDB Atlas with **Vector Search** for semantic grower profiling.
 - **Cloud**: Google Cloud Run (Autoscaling), GitHub Actions CI/CD.
