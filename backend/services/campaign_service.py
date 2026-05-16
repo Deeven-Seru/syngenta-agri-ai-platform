@@ -20,7 +20,10 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     
     # Get campaign details for product name
     campaign = await col_campaigns().find_one({"_id": campaign_id})
-    product = campaign.get("product", "Syngenta Solution") if campaign else "Syngenta Solution"
+    if not campaign:
+        logger.error("Campaign not found for dispatch", campaign_id=campaign_id)
+        return
+    product = campaign.get("product", "Syngenta Solution")
     
     # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
     semaphore = asyncio.Semaphore(10)
