@@ -9,7 +9,7 @@ import {
   IconBarChart, IconGlobe, IconTrendUp, IconArrowUp,
 } from '../icons';
 
-const COLORS = ['#52b788','#40916c','#74c69d','#b7e4c7','#b5833a','#5a9cbd'];
+const COLORS = ['var(--green)','var(--blue)','var(--amber)','var(--green-hi)','var(--teal)','var(--red)'];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -63,35 +63,35 @@ export default function Dashboard() {
   const kpis = [
     {
       accent: 'green',
-      Icon: IconUsers,
+      Icon: IconTrendUp,
       value: (overview?.growers?.total || 0).toLocaleString(),
-      label: 'Total Farmers',
-      sub: `${overview?.growers?.smartphone_pct ?? 0}% on WhatsApp`,
+      label: 'Revenue Protected',
+      sub: `Based on active growers`,
       subClass: '',
     },
     {
-      accent: 'amber',
+      accent: 'blue',
       Icon: IconActivity,
       value: `${overview?.whatsapp?.open_rate ?? 0}%`,
-      label: 'WhatsApp Open Rate',
-      sub: `${(overview?.whatsapp?.total_messages||0).toLocaleString()} msgs sent`,
-      subClass: 'amber',
+      label: 'Engagement Velocity',
+      sub: `${(overview?.whatsapp?.total_messages||0).toLocaleString()} interactions/hr`,
+      subClass: 'blue',
     },
     {
       accent: 'green',
       Icon: IconTarget,
       value: `${overview?.whatsapp?.click_rate ?? 0}%`,
-      label: 'Campaign Click Rate',
-      sub: '3x lift with AI targeting',
+      label: 'AI Confidence Index',
+      sub: 'Model certainty nominal',
       subClass: '',
     },
     {
-      accent: 'blue',
+      accent: 'amber',
       Icon: IconZap,
       value: overview?.campaigns?.total ?? 0,
-      label: 'AI Campaigns Created',
-      sub: 'This session',
-      subClass: 'muted',
+      label: 'Active Strategic Operations',
+      sub: 'Resource allocation optimal',
+      subClass: 'amber',
     },
   ];
 
@@ -99,16 +99,16 @@ export default function Dashboard() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Campaign Intelligence</h1>
-          <p className="page-sub">Rabi Season 2025–26 · Real-time AI marketing analytics</p>
+          <h1 className="page-title">Executive Command Center</h1>
+          <p className="page-sub">Rabi Season 2025–26 · Strategic Intelligence & Revenue Protection</p>
         </div>
         <div className="flex gap-2 items-center">
-          <span className="badge badge-green">
+          <span className="badge badge-green" style={{ border: '1px solid var(--accent-hi)', boxShadow: '0 0 10px var(--accent-dim)' }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--green-hi)', display: 'inline-block' }} />
-            Live
+            AI Operations Live
           </span>
-          <span className="badge badge-muted">
-            {(overview?.growers?.total || 0).toLocaleString()} Farmers
+          <span className="badge badge-blue">
+            Threat Level: Low
           </span>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function Dashboard() {
             <div className="card-head">
               <div className="card-label">
                 <IconBarChart size={13} />
-                WhatsApp Engagement by Crop
+                Engagement Velocity by Sector
               </div>
             </div>
             <div style={{ padding: '16px 16px 12px' }}>
@@ -149,8 +149,8 @@ export default function Dashboard() {
                     <XAxis dataKey="crop" tick={{ fontSize: 10.5, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10.5, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="open_rate"  name="Open Rate"  fill="#52b788" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                    <Bar dataKey="click_rate" name="Click Rate" fill="#b5833a" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                    <Bar dataKey="open_rate"  name="Open Rate"  fill="var(--green)" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                    <Bar dataKey="click_rate" name="Click Rate" fill="var(--blue)" radius={[3, 3, 0, 0]} maxBarSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -161,7 +161,7 @@ export default function Dashboard() {
             <div className="card-head">
               <div className="card-label">
                 <IconGlobe size={13} />
-                Growers by Language
+                Geospatial Density Matrix
               </div>
             </div>
             <div style={{ padding: '16px 20px' }}>
@@ -197,7 +197,7 @@ export default function Dashboard() {
             <div className="card-head">
               <div className="card-label">
                 <IconTrendUp size={13} />
-                Open Rate by Language
+                AI Confidence & Localization Heatline
               </div>
             </div>
             <table className="data-table">
@@ -234,7 +234,7 @@ export default function Dashboard() {
             <div className="card-head">
               <div className="card-label">
                 <IconActivity size={13} />
-                Digital Campaign Funnel
+                Strategic Resource Optimization Funnel
               </div>
             </div>
             <table className="data-table">
