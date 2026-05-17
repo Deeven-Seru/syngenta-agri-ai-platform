@@ -43,3 +43,4 @@ export const IconFilter  = (p: IconProps) => <svg {...I(p)}><polygon points="22 
 export const IconActivity= (p: IconProps) => <svg {...I(p)}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
 export const IconGlobe   = (p: IconProps) => <svg {...I(p)}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
 export const IconMessage = (p: IconProps) => <svg {...I(p)}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+export const IconMoon    = (p: IconProps) => <svg {...I(p)}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
