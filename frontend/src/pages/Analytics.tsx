@@ -96,7 +96,8 @@ export default function Analytics() {
       getPosition: (d: any) => d.COORDINATES,
       getWeight: (d: any) => {
         const w = Number(d.weight) || 0;
-        return (w - weightStats.min) / weightRange;
+        if (weightStats.max === weightStats.min) return w > 0 ? 1 : 0;
+        return (w - weightStats.min) / (weightStats.max - weightStats.min);
       },
       radiusPixels: 60,
       intensity: 1.6,
