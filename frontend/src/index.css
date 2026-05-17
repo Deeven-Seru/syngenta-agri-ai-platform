@@ -799,6 +799,12 @@ html, body, #root {
   font-size: 11px;
 }
 
+.global-header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
 .ticker-item {
   display: flex;
   align-items: center;
