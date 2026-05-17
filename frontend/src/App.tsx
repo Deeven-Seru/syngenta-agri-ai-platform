@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import ContentGen from './pages/ContentGen';
@@ -29,6 +29,12 @@ const SYS: { id: Page; label: string; Icon: React.FC<any> }[] = [
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
+  const [isLight, setIsLight] = useState(false);
+
+  useEffect(() => {
+    if (isLight) document.documentElement.classList.add('light-theme');
+    else document.documentElement.classList.remove('light-theme');
+  }, [isLight]);
 
   return (
     <div className="app-layout">
@@ -90,7 +96,26 @@ export default function App() {
 
       {/* ── Main ── */}
       <main className="main-content">
-        <div key={page} className="page-enter" style={{ height: '100%' }}>
+        {/* Executive Global Header */}
+        <header className="global-header">
+          <div className="global-header-ticker">
+            <div className="ticker-item"><span className="ticker-label">PROTECTED REVENUE</span> <span className="ticker-value">--</span></div>
+            <div className="ticker-item"><span className="ticker-label">ENGAGEMENT PULSE</span> <span className="ticker-value">--</span></div>
+            <div className="ticker-item"><span className="ticker-label">AI CONFIDENCE</span> <span className="ticker-value">--</span></div>
+            <div className="ticker-item"><span className="ticker-label">WEATHER THREATS</span> <span className="ticker-value">--</span></div>
+          </div>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <button className="theme-toggle" onClick={() => setIsLight(!isLight)} aria-label="Toggle theme">
+              {isLight ? <IconSun size={14} /> : <IconDatabase size={14} />} {isLight ? 'LIGHT' : 'DARK'}
+            </button>
+            <div className="live-indicator">
+              <div className="live-dot" />
+              AI SECURE LINK ACTIVE
+            </div>
+          </div>
+        </header>
+
+        <div key={page} className="page-enter" style={{ height: 'calc(100% - 56px)', overflowY: 'auto' }}>
           {page === 'dashboard'  && <Dashboard />}
           {page === 'campaigns'  && <Campaigns />}
           {page === 'content'    && <ContentGen />}

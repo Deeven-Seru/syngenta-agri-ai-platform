@@ -21,6 +21,7 @@ async def connect_db():
     print("✅ MongoDB Atlas connected")
 
 
+
 async def close_db():
     global _client
     if _client:
