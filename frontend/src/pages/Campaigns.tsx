@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import {
   IconTarget, IconFilter, IconCheck, IconZap,
-  IconMessage, IconRefresh, IconSun, IconPlus,
+  IconMessage, IconRefresh, IconSun, IconPlus, IconPhone,
 } from '../icons';
 
 const CROPS = ['wheat', 'chickpea', 'mustard', 'barley', 'potato', 'lentil', 'safflower', 'cumin'];
@@ -355,6 +355,7 @@ export default function Campaigns() {
                         <th>#</th>
                         <th>District</th>
                         <th>Language</th>
+                        <th>Channel</th>
                         <th>Score</th>
                         <th>Tier</th>
                       </tr>
@@ -365,6 +366,11 @@ export default function Campaigns() {
                           <td className="text-3 font-600">{t.rank}</td>
                           <td style={{ fontSize: 12 }}>{t.district}</td>
                           <td><span className="badge badge-blue">{t.language}</span></td>
+                          <td>
+                            <span className="badge badge-muted">
+                              {String(t.recommended_channel || 'auto').replaceAll('_', ' ')}
+                            </span>
+                          </td>
                           <td className="text-green font-600 font-mono">
                             {(t.receptivity_score * 100).toFixed(1)}%
                           </td>
@@ -401,6 +407,12 @@ export default function Campaigns() {
                             {msg.campaign_timing === 'urgent' && (
                               <span className="badge badge-red">Urgent</span>
                             )}
+                            {msg.campaign_timing === 'delay' && (
+                              <span className="badge badge-amber">Delay</span>
+                            )}
+                            <span className="badge badge-blue">
+                              {String(msg.recommended_channel || msg.channel || 'auto').replaceAll('_', ' ')}
+                            </span>
                             <span className="text-3 font-mono" style={{ fontSize: 10 }}>
                               {msg.character_count} chars
                             </span>
@@ -410,10 +422,41 @@ export default function Campaigns() {
                         {msg.message_english && (
                           <div className="wa-translation">{msg.message_english}</div>
                         )}
+                        {msg.timing_window && (
+                          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <IconPhone size={11} style={{ color: 'var(--blue-hi)' }} />
+                            <span className="text-3" style={{ fontSize: 10.5 }}>
+                              Recommended action: {msg.timing_window}
+                            </span>
+                          </div>
+                        )}
                         {msg.weather_context && (
                           <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <IconSun size={11} style={{ color: 'var(--amber-hi)' }} />
                             <span className="text-3" style={{ fontSize: 10.5 }}>{msg.weather_context}</span>
+                          </div>
+                        )}
+                        {Array.isArray(msg.weather_risks) && msg.weather_risks.length > 0 && (
+                          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {msg.weather_risks.map((risk: string) => (
+                              <span key={risk} className="badge badge-amber" style={{ fontSize: 9 }}>
+                                {risk.replaceAll('_', ' ')}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {Array.isArray(msg.decision_reasons) && msg.decision_reasons.length > 0 && (
+                          <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 9 }}>
+                            <div className="text-3" style={{ fontSize: 10, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                              Why this variant
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {msg.decision_reasons.map((reason: string) => (
+                                <span key={reason} className="text-3" style={{ fontSize: 10.5 }}>
+                                  • {reason}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

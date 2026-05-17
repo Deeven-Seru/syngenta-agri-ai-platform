@@ -19,6 +19,7 @@ from services.receptivity_service import score_growers
 from services.campaign_service import dispatch_twilio_messages
 from services.content_generator import generate_whatsapp_message, generate_voice_script
 from services.weather_service import get_district_weather
+from services.campaign_intelligence import enrich_target, recommend_channel, channel_mix
 
 router = APIRouter()
 
@@ -108,6 +109,21 @@ async def create_campaign(req: CampaignCreateRequest, background_tasks: Backgrou
     baseline_clicks = len(filtered) * 0.05
     lift = estimated_clicks / baseline_clicks if baseline_clicks > 0 else 1.0
 
+    for g in filtered:
+        g["recommended_channel"] = recommend_channel(
+            g.get("device_type"),
+            g.get("receptivity_score", 0),
+        )
+        g["decision_reasons"] = [
+            f"{g.get('receptivity_tier', 'low').title()} receptivity from model score",
+            f"{g.get('language', 'Local')} language variant available",
+            (
+                "WhatsApp-ready smartphone grower"
+                if g.get("device_type") == "smartphone"
+                else "Voice/SMS-first grower for low-bandwidth reach"
+            ),
+        ]
+
     # Store campaign in MongoDB
     campaign_doc = {
         "_id": campaign_id,
@@ -123,6 +139,7 @@ async def create_campaign(req: CampaignCreateRequest, background_tasks: Backgrou
         "estimated_clicks": round(estimated_clicks, 1),
         "baseline_clicks": round(baseline_clicks, 1),
         "lift_factor": round(lift, 2),
+        "channel_mix": channel_mix(filtered),
         "filters": req.dict(),
     }
     await col_campaigns().insert_one(campaign_doc)
@@ -139,6 +156,8 @@ async def create_campaign(req: CampaignCreateRequest, background_tasks: Backgrou
             "language": g.get("language"),
             "district": g.get("district"),
             "state": g.get("state"),
+            "recommended_channel": g.get("recommended_channel"),
+            "decision_reasons": g.get("decision_reasons", []),
         } for g in filtered]
         await col_model_scores().insert_many(score_docs)
 
@@ -165,9 +184,13 @@ async def get_campaign_targets(campaign_id: str, limit: int = 50):
     )
     targets = await cursor.to_list(length=limit)
 
+    campaign = await col_campaigns().find_one({"_id": campaign_id}) or {}
+
     # Strip MongoDB _id for JSON
     for t in targets:
         t.pop("_id", None)
+        if not t.get("decision_reasons"):
+            t.update(enrich_target(t, campaign.get("crop", "crop"), campaign.get("product", "product")))
 
     return {"campaign_id": campaign_id, "targets": targets, "count": len(targets)}
 
@@ -213,6 +236,7 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
         if not device:
             g_doc = grower_map.get(grower_id)
             device = g_doc.get("device_type", "smartphone") if g_doc else "smartphone"
+        target["device_type"] = device
         
         key = f"{lang}:{device}"
         if key in seen_keys:
@@ -223,8 +247,14 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
         district = target.get("district", "Delhi")
         weather = await get_district_weather(district)
         weather_ctx = weather.get("weather_context", "")
+        intelligence = enrich_target(
+            target,
+            campaign["crop"],
+            campaign["product"],
+            weather,
+        )
 
-        if device == "smartphone":
+        if intelligence["recommended_channel"] == "whatsapp":
             msg = await generate_whatsapp_message(
                 grower_language=lang,
                 crop=campaign["crop"],
@@ -236,6 +266,7 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
                 "language": lang,
                 "sample_grower_id": target.get("grower_id"),
                 "district": district,
+                **intelligence,
                 **msg,
             })
         else:
@@ -250,6 +281,7 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
                 "language": lang,
                 "sample_grower_id": target.get("grower_id"),
                 "district": district,
+                **intelligence,
                 "message_native": script,
                 "message_english": "Voice call script generated",
                 "character_count": len(script),
