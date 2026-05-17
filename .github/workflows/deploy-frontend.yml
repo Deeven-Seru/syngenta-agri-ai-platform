@@ -42,9 +42,10 @@ jobs:
       - name: Build production bundle
         working-directory: frontend
         env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
           # Set this secret in GitHub → Settings → Secrets → Actions
-          # to point at your teammate's Cloud Run backend URL
-          # e.g. https://syngenta-backend-xxxx-uc.a.run.app
+          # to point at the deployed backend URL
+          # e.g. https://your-backend.example.com
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 

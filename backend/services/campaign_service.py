@@ -10,8 +10,6 @@ import structlog
 from twilio.rest import Client
 from database import col_growers, col_campaigns, col_model_scores, col_autonomous_campaigns
 from services.content_generator import generate_whatsapp_message, generate_voice_script
-from services.weather_service import get_district_weather
-
 logger = structlog.get_logger()
 
 async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, settings):
@@ -50,10 +48,12 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         async with semaphore:
             grower_id = target.get("grower_id")
             g_doc = grower_map.get(grower_id)
-            if not g_doc or not g_doc.get("phone"):
+            if not g_doc:
                 return
 
-            phone = g_doc["phone"]
+            phone = g_doc.get("phone") or g_doc.get("_id")
+            if not phone:
+                return
             device = target.get("device_type", "smartphone")
             lang = g_doc.get("language", "Hindi")
             district = target.get("district", "Unknown")

@@ -26,6 +26,17 @@ MONGODB_DB = os.getenv("MONGODB_DB_NAME", "syngenta_agri")
 DATA_DIR = Path(os.getenv("DATA_DIR", "/Users/deeven/Developer/Syngenta_IITM_Hackathon_2026_dataset (1)"))
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Ingest Syngenta hackathon CSV data into MongoDB.")
+    parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Exit 0 if growers data already exists, otherwise exit 1 without ingesting.",
+    )
+    return parser.parse_args()
+
+
 def parse_bool(val: str) -> bool:
     return str(val).strip().lower() in ("true", "1", "yes")
 
@@ -43,8 +54,16 @@ async def ingest_growers(db, rows: list[dict]):
             crop_cal = json.loads(r["grower_crop_calendar"])
         except Exception:
             crop_cal = {}
+        phone = (
+            r.get("phone")
+            or r.get("grower_phone")
+            or r.get("phone_number")
+            or r.get("mobile")
+            or r["grower_id"]
+        )
         docs.append({
             "_id": r["grower_id"],
+            "phone": str(phone),
             "state": r["state"],
             "district": r["district"],
             "tehsil": r["tehsil"],
@@ -69,6 +88,7 @@ async def ingest_growers(db, rows: list[dict]):
     await col.create_index("primary_crop")
     await col.create_index("language")
     await col.create_index("device_type")
+    await col.create_index("phone")
     print(f"  ✅ growers: {len(docs):,} docs inserted")
 
 
@@ -223,6 +243,8 @@ async def ingest_visit_log(db, rows: list[dict]):
 
 
 async def main():
+    args = parse_args()
+
     if not MONGODB_URI:
         print("❌ MONGODB_URI not set in .env")
         sys.exit(1)
@@ -236,17 +258,26 @@ async def main():
     await client.admin.command("ping")
     print(f"✅ Connected to database: {MONGODB_DB}\n")
 
+    if args.check_only:
+        existing = await db["growers"].count_documents({}, limit=1)
+        client.close()
+        if existing:
+            print("✅ Growers collection already populated")
+            return
+        print("ℹ️ Growers collection is empty")
+        sys.exit(1)
+
     print("📥 Starting ingestion...\n")
 
     files = {
-        "growers": DATA_DIR / "growers.csv",
-        "whatsapp": DATA_DIR / "whatsapp_campaign.csv",
-        "funnel": DATA_DIR / "digital_funnel_weekly.csv",
-        "reps": DATA_DIR / "reps_territory.csv",
-        "retailers": DATA_DIR / "retailers.csv",
-        "pos": DATA_DIR / "retailer_pos.csv",
-        "inventory": DATA_DIR / "retailer_inventory_weekly.csv",
-        "visits": DATA_DIR / "retailer_visit_log.csv",
+        "growers": args.data_dir / "growers.csv",
+        "whatsapp": args.data_dir / "whatsapp_campaign.csv",
+        "funnel": args.data_dir / "digital_funnel_weekly.csv",
+        "reps": args.data_dir / "reps_territory.csv",
+        "retailers": args.data_dir / "retailers.csv",
+        "pos": args.data_dir / "retailer_pos.csv",
+        "inventory": args.data_dir / "retailer_inventory_weekly.csv",
+        "visits": args.data_dir / "retailer_visit_log.csv",
     }
 
     for name, path in files.items():

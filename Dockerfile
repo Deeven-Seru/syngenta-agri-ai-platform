@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source
 COPY backend/ .
+RUN chmod +x startup.sh
 
 # Ensure ml directory exists and copy artifacts
 RUN mkdir -p ml
@@ -25,4 +26,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["./startup.sh"]

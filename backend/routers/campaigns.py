@@ -10,13 +10,15 @@ GET  /api/campaigns/{id}/targets  → Get ranked target growers
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime
 import uuid
-import asyncio
 
-from database import col_growers, col_campaigns, col_model_scores, col_inventory
+from config import get_settings
+from database import col_growers, col_campaigns, col_model_scores
 from services.receptivity_service import score_growers
 from services.campaign_service import dispatch_twilio_messages
+from services.content_generator import generate_whatsapp_message, generate_voice_script
+from services.weather_service import get_district_weather
 
 router = APIRouter()
 
