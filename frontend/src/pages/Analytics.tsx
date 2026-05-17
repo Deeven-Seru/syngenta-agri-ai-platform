@@ -87,7 +87,6 @@ export default function Analytics() {
     },
     { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
   );
-  const weightRange = Math.max(1, weightStats.max - weightStats.min);
 
   const layers = [
     new HeatmapLayer({
