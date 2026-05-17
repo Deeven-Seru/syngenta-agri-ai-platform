@@ -14,4 +14,4 @@ echo "📥 Checking if data ingestion is needed..."
 python3 scripts/ingest_data.py --check-only 2>/dev/null || python3 scripts/ingest_data.py
 
 echo "🌐 Starting FastAPI server on port ${PORT:-8080}..."
-exec /Users/deeven/Library/Python/3.9/bin/uvicorn main:app --host 0.0.0.0 --port "${PORT:-8080}"
+exec python3 -m uvicorn main:app --host 0.0.0.0 --port "${PORT:-8080}"
