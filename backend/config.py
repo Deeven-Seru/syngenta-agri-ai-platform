@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
 
+    # SuperTokens
+    supertokens_connection_uri: str = "https://try.supertokens.com"
+    supertokens_api_key: str = ""
+    app_name: str = "Syngenta Command Center"
+    api_domain: str = "http://localhost:8080"
+    website_domain: str = "http://localhost:5173"
+    api_base_path: str = "/auth"
+    website_base_path: str = "/auth"
+
     # App
     app_port: int = 8080
     environment: str = "production"

@@ -4,12 +4,15 @@ from database import (
     col_growers, col_whatsapp_log, col_funnel,
     col_retailer_pos, col_inventory, col_campaigns
 )
+from supertokens_python.recipe.session.framework.fastapi import verify_session
+from supertokens_python.recipe.session import SessionContainer
+from fastapi import Depends, HTTPException
 
 router = APIRouter()
 
 
 @router.get("/overview")
-async def get_overview():
+async def get_overview(session: SessionContainer = Depends(verify_session())):
     """Platform KPIs for the main dashboard."""
     # Grower counts
     total_growers = await col_growers().count_documents({})
@@ -55,7 +58,7 @@ async def get_overview():
 
 
 @router.get("/engagement-by-crop")
-async def engagement_by_crop():
+async def engagement_by_crop(session: SessionContainer = Depends(verify_session())):
     """WhatsApp open + click rates segmented by crop."""
     pipeline = [
         {
@@ -83,7 +86,7 @@ async def engagement_by_crop():
 
 
 @router.get("/engagement-by-language")
-async def engagement_by_language():
+async def engagement_by_language(session: SessionContainer = Depends(verify_session())):
     """WhatsApp engagement rates by grower language."""
     # Join whatsapp_log with growers to get language
     pipeline = [
@@ -121,7 +124,7 @@ async def engagement_by_language():
 
 
 @router.get("/funnel")
-async def get_funnel():
+async def get_funnel(session: SessionContainer = Depends(verify_session())):
     """Digital campaign funnel: impressions → visits → leads by campaign."""
     pipeline = [
         {
