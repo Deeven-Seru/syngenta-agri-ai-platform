@@ -13,7 +13,7 @@ We will use **GitHub Repository Rulesets** to enforce this. Rulesets are more fl
 - **Target**: `branch`
 - **Enforcement**: `active`
 - **Conditions**:
-    - `ref_name**: `{"include": ["~ALL"], "exclude": []}` (Targets every branch in the repo)
+    - **ref_name**: `{"include": ["~ALL"], "exclude": []}` (Targets every branch in the repo)
 
 ### Bypass Actors
 The following users are granted `always` bypass mode, allowing them to push directly:
