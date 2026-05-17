@@ -2,48 +2,48 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&family=Geist+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Palette — near-black base, single green accent */
-  --bg-base:    #080c09;
-  --bg-surface: #0c1210;
-  --bg-panel:   #101a12;
-  --bg-hover:   #141f16;
-  --bg-input:   #0c1210;
+  /* Palette — MongoDB Atlas Dark Theme */
+  --bg-base:    #001e2b;
+  --bg-surface: #061621;
+  --bg-panel:   #001114;
+  --bg-hover:   #082835;
+  --bg-input:   #061621;
 
-  --border:       rgba(255,255,255,0.06);
-  --border-med:   rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.16);
+  --border:       rgba(255,255,255,0.08);
+  --border-med:   rgba(255,255,255,0.15);
+  --border-strong:rgba(255,255,255,0.25);
 
-  /* Accent — single surgical green */
-  --accent:      #2d6a4f;
-  --accent-hi:   #40916c;
-  --accent-glow: rgba(64,145,108,0.18);
-  --accent-dim:  rgba(64,145,108,0.08);
+  /* Accent — MongoDB Spring Green */
+  --accent:      #00A35C;
+  --accent-hi:   #00ED64;
+  --accent-glow: rgba(0, 237, 100, 0.15);
+  --accent-dim:  rgba(0, 237, 100, 0.08);
 
   /* Text */
-  --text-1: #e8f0ea;
-  --text-2: #8fa896;
-  --text-3: #4d6354;
-  --text-4: #2a3a2e;
+  --text-1: #E8EDEB;
+  --text-2: #C1C7C6;
+  --text-3: #889397;
+  --text-4: #5C6C75;
 
   /* State */
-  --green:  #40916c;
-  --amber:  #b5833a;
-  --red:    #944545;
-  --blue:   #3a6b8a;
+  --green:  #00A35C;
+  --amber:  #FFC010;
+  --red:    #E34F41;
+  --blue:   #016BF8;
 
-  --green-hi: #52b788;
-  --amber-hi: #d4a45e;
-  --red-hi:   #c96c6c;
-  --blue-hi:  #5a9cbd;
+  --green-hi: #00ED64;
+  --amber-hi: #FFC010;
+  --red-hi:   #F97260;
+  --blue-hi:  #369BFF;
 
-  /* Radii */
-  --r-sm: 5px;
-  --r-md: 9px;
-  --r-lg: 13px;
-  --r-xl: 18px;
+  /* Radii - MongoDB style uses slightly sharper or specific radii */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 12px;
+  --r-xl: 16px;
 
   /* Sidebar */
-  --sidebar-w: 228px;
+  --sidebar-w: 240px;
 
   /* Transitions */
   --t-fast: 120ms ease;
