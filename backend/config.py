@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Gemini
     gemini_api_key: str = ""
 
+    # Groq
+    groq_api_key: str = ""
+
     # MongoDB
     mongodb_uri: str = ""
     mongodb_db_name: str = "syngenta_agri"
@@ -28,6 +31,7 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
+    twilio_phone_number: str = "+14155238886"
 
     # SuperTokens
     supertokens_connection_uri: str = "https://try.supertokens.com"

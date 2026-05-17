@@ -186,3 +186,34 @@ Campaign Data: {campaign_data}
 Format: Plain text, no markdown, no bullet points."""
     response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return response.text.strip()
+
+
+async def generate_voice_script(
+    grower_language: str,
+    crop: str,
+    product: str,
+    crop_stage: Optional[str] = None,
+    weather_context: Optional[str] = None,
+) -> str:
+    """Generates a short script for an automated voice call (IVR)."""
+    client = get_client()
+    lang_label = LANGUAGE_PROMPTS.get(grower_language, "Hindi")
+    
+    prompt = f"""You are a Syngenta India advisor calling a farmer.
+Write a 15-second script for an automated voice call.
+
+STRICT REQUIREMENTS:
+1. Write ONLY in {lang_label}.
+2. Sound like a helpful neighbor, very conversational.
+3. Mention {product} for the {crop} crop.
+4. Keep it under 40 words.
+5. End with: 'For more info, call this number back.'
+
+CONTEXT:
+- Crop: {crop}
+- Product: {product}
+- Stage: {crop_stage}
+- Weather: {weather_context}
+"""
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    return response.text.strip()

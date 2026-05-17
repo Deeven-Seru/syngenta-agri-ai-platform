@@ -8,15 +8,7 @@ from contextlib import asynccontextmanager
 import structlog
 
 from database import connect_db, close_db
-from routers import (
-    campaigns,
-    growers,
-    analytics,
-    weather,
-    content,
-    system,
-    ticker,
-)
+from routers import campaigns, growers, analytics, weather, content, system, ticker
 
 from supertokens_python.framework.fastapi import get_middleware
 from supertokens_python import get_all_cors_headers
@@ -33,7 +25,6 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🌱 Syngenta Agri-AI Platform starting...")
     await connect_db()
-
     yield
 
     # Shutdown
@@ -50,75 +41,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# -----------------------------
-# CORS CONFIGURATION
-# -----------------------------
-# IMPORTANT:
-# - CORS must be added BEFORE SuperTokens middleware
-# - SuperTokens middleware should be outermost
-# - Use allow_headers=["*"] to avoid auth header issues
-# -----------------------------
-
-app.add_middleware(get_middleware())
+# CORS must be added BEFORE SuperTokens middleware
+# (Starlette: last added = outermost = executes first)
+# SuperTokens needs to be outermost to handle CORS for /auth/* routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "anti-csrf"] + get_all_cors_headers(),
-    expose_headers=["front-token", "anti-csrf"] + get_all_cors_headers(),
+    allow_methods=["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization"] + get_all_cors_headers(),
+    expose_headers=get_all_cors_headers(),
 )
 
+# SuperTokens middleware — outermost (handles /auth/* CORS)
+app.add_middleware(get_middleware())
 
-# -----------------------------
-# ROUTERS
-# -----------------------------
-
-app.include_router(
-    campaigns.router,
-    prefix="/api/campaigns",
-    tags=["Campaigns"],
-)
-
-app.include_router(
-    growers.router,
-    prefix="/api/growers",
-    tags=["Growers"],
-)
-
-app.include_router(
-    analytics.router,
-    prefix="/api/analytics",
-    tags=["Analytics"],
-)
-
-app.include_router(
-    weather.router,
-    prefix="/api/weather",
-    tags=["Weather"],
-)
-
-app.include_router(
-    content.router,
-    prefix="/api/content",
-    tags=["Content Generation"],
-)
-
-app.include_router(
-    system.router,
-    prefix="/api/system",
-    tags=["System"],
-)
-
-app.include_router(
-    ticker.router,
-    prefix="/api",
-    tags=["Real-Time Ticker"],
-)
-
-# -----------------------------
-# HEALTH ROUTES
-# -----------------------------
+# Register routers
+app.include_router(campaigns.router, prefix="/api/campaigns", tags=["Campaigns"])
+app.include_router(growers.router, prefix="/api/growers", tags=["Growers"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])
+app.include_router(content.router, prefix="/api/content", tags=["Content Generation"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(ticker.router, prefix="/api", tags=["Real-Time Ticker"])
 
 
 @app.get("/", tags=["Health"])

@@ -10,13 +10,13 @@ GET  /api/campaigns/{id}/targets  → Get ranked target growers
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
+import asyncio
 
 from database import col_growers, col_campaigns, col_model_scores, col_inventory
 from services.receptivity_service import score_growers
-from services.content_generator import generate_whatsapp_message
-from services.weather_service import get_district_weather
+from services.campaign_service import dispatch_twilio_messages
 
 router = APIRouter()
 
@@ -30,6 +30,10 @@ class CampaignCreateRequest(BaseModel):
     min_receptivity_tier: str = "medium"  # "high", "medium", "low"
     device_filter: Optional[str] = None  # "smartphone", "keypad", "all"
     max_targets: int = 500
+    # Advanced Filters
+    min_farm_size: Optional[float] = None
+    target_language: Optional[str] = None
+    offline_only: Optional[bool] = False
 
 
 class CampaignResponse(BaseModel):
@@ -62,6 +66,14 @@ async def create_campaign(req: CampaignCreateRequest, background_tasks: Backgrou
         query["district"] = {"$in": req.target_districts}
     if req.device_filter and req.device_filter != "all":
         query["device_type"] = req.device_filter
+    
+    # Advanced Filter logic
+    if req.min_farm_size is not None:
+        query["farm_size_acres"] = {"$gte": req.min_farm_size}
+    if req.target_language:
+        query["language"] = req.target_language
+    if req.offline_only:
+        query["offline_campaign_attended"] = False
 
     # Fetch matching growers
     grower_cursor = col_growers().find(query).limit(req.max_targets * 3)
@@ -180,40 +192,71 @@ async def generate_campaign_content(campaign_id: str, sample_size: int = 10):
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Generate messages (deduplicated by language)
+    # Generate messages (deduplicated by language + device)
     messages = []
-    seen_languages = set()
+    seen_keys = set()
+
+    # Bulk fetch grower details for those without device_type to avoid N+1 queries
+    needed_ids = list(set(t.get("grower_id") for t in targets if not t.get("device_type")))
+    growers_list = await col_growers().find({"_id": {"$in": needed_ids}}).to_list(length=len(needed_ids))
+    grower_map = {g["_id"]: g for g in growers_list}
 
     for target in targets:
         lang = target.get("language", "Hindi")
-        if lang in seen_languages:
+        
+        # Resolve actual device (prioritize target field, then DB lookup)
+        device = target.get("device_type")
+        grower_id = target.get("grower_id")
+        
+        if not device:
+            g_doc = grower_map.get(grower_id)
+            device = g_doc.get("device_type", "smartphone") if g_doc else "smartphone"
+        
+        key = f"{lang}:{device}"
+        if key in seen_keys:
             continue
-        seen_languages.add(lang)
+        seen_keys.add(key)
 
         # Get weather for district
         district = target.get("district", "Delhi")
         weather = await get_district_weather(district)
         weather_ctx = weather.get("weather_context", "")
 
-        msg = await generate_whatsapp_message(
-            grower_language=lang,
-            crop=campaign["crop"],
-            product=campaign["product"],
-            weather_context=weather_ctx,
-        )
-        messages.append({
-            "language": lang,
-            "sample_grower_id": target.get("grower_id"),
-            "district": district,
-            "weather_context": weather_ctx,
-            "campaign_timing": weather.get("campaign_timing", "optimal"),
-            **msg,
-        })
+        if device == "smartphone":
+            msg = await generate_whatsapp_message(
+                grower_language=lang,
+                crop=campaign["crop"],
+                product=campaign["product"],
+                weather_context=weather_ctx,
+            )
+            messages.append({
+                "channel": "whatsapp",
+                "language": lang,
+                "sample_grower_id": target.get("grower_id"),
+                "district": district,
+                **msg,
+            })
+        else:
+            script = await generate_voice_script(
+                grower_language=lang,
+                crop=campaign["crop"],
+                product=campaign["product"],
+                weather_context=weather_ctx,
+            )
+            messages.append({
+                "channel": "voice",
+                "language": lang,
+                "sample_grower_id": target.get("grower_id"),
+                "district": district,
+                "message_native": script,
+                "message_english": "Voice call script generated",
+                "character_count": len(script),
+            })
 
     return {
         "campaign_id": campaign_id,
         "messages_generated": len(messages),
-        "languages_covered": list(seen_languages),
+        "languages_covered": list(set([m["language"] for m in messages])),
         "messages": messages,
     }
 
@@ -236,3 +279,37 @@ async def get_campaign(campaign_id: str):
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign["id"] = campaign.pop("_id")
     return campaign
+
+
+@router.post("/{campaign_id}/launch")
+async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
+    """
+    Launch: dispatch the queue via Twilio in the background.
+    """
+    settings = get_settings()
+    if not settings.twilio_account_sid or not settings.twilio_auth_token:
+        raise HTTPException(status_code=500, detail="Twilio credentials not configured")
+        
+    campaign = await col_campaigns().find_one({"_id": campaign_id})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Check if targets exist without materializing the list
+    first_target = await col_model_scores().find_one({"campaign_id": campaign_id})
+    if not first_target:
+        raise HTTPException(status_code=400, detail="No targets found for this campaign")
+
+    # Mark as launching and offload to background
+    await col_campaigns().update_one({"_id": campaign_id}, {"$set": {"status": "launching"}})
+    
+    background_tasks.add_task(
+        dispatch_twilio_messages, 
+        campaign_id, 
+        campaign["crop"], 
+        settings
+    )
+
+    return {
+        "campaign_id": campaign_id,
+        "status": "launching"
+    }

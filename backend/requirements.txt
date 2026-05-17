@@ -18,3 +18,5 @@ tenacity
 geopy
 python-multipart
 psutil
+groq
+twilio

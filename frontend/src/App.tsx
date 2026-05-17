@@ -11,13 +11,16 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import ContentGen from './pages/ContentGen';
 import Analytics from './pages/Analytics';
+import WeatherLive from './pages/WeatherLive';
+import GrowerSegments from './pages/GrowerSegments';
+import ModelScopes from './pages/ModelScopes';
 import {
   IconGrid, IconTarget, IconEdit, IconBarChart,
   IconLeaf, IconDatabase, IconCpu, IconSun,
 } from './icons';
 import './index.css';
 
-type Page = 'dashboard' | 'campaigns' | 'content' | 'analytics';
+type Page = 'dashboard' | 'campaigns' | 'content' | 'analytics' | 'weather' | 'growers' | 'models';
 
 interface TickerData {
   protected_revenue: string;
@@ -27,16 +30,16 @@ interface TickerData {
 }
 
 const NAV: { id: Page; label: string; Icon: React.FC<any> }[] = [
-  { id: 'dashboard', label: 'Overview', Icon: IconGrid },
-  { id: 'campaigns', label: 'Campaigns', Icon: IconTarget },
-  { id: 'content', label: 'Content Generator', Icon: IconEdit },
-  { id: 'analytics', label: 'Analytics', Icon: IconBarChart },
+  { id: 'dashboard', label: 'Overview',         Icon: IconGrid     },
+  { id: 'campaigns', label: 'Campaigns',         Icon: IconTarget   },
+  { id: 'content',   label: 'Content Generator', Icon: IconEdit     },
+  { id: 'analytics', label: 'Analytics',         Icon: IconBarChart },
 ];
 
-const SYS = [
-  { label: 'Weather Live', Icon: IconSun },
-  { label: 'Grower Segments', Icon: IconDatabase },
-  { label: 'Model Scores', Icon: IconCpu },
+const SYS: { id: Page; label: string; Icon: React.FC<any> }[] = [
+  { id: 'weather',  label: 'Weather Live',    Icon: IconSun      },
+  { id: 'growers',  label: 'Grower Segments', Icon: IconDatabase },
+  { id: 'models',   label: 'Model Scores',    Icon: IconCpu      },
 ];
 
 function AppInner() {
@@ -45,38 +48,32 @@ function AppInner() {
   const [ticker, setTicker] = useState<TickerData | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const session = useSessionContext();
-  const userEmail = !session.loading && session.loading
+  const userEmail = !session.loading && session.doesSessionExist
     ? (session as any).accessTokenPayload?.email ?? 'User'
     : '';
 
-  // Real-time ticker via WebSocket with REST fallback + auto-reconnect
+  // Real-time ticker via WebSocket + REST fallback + auto-reconnect
   useEffect(() => {
     let ws: WebSocket | null = null;
     let retryTimer: ReturnType<typeof setTimeout>;
 
-    // Initial REST fetch for instant data
     fetch('http://localhost:8080/api/ticker')
       .then(r => r.json())
       .then(setTicker)
-      .catch(() => { });
+      .catch(() => {});
 
     const connect = () => {
       ws = new WebSocket('ws://localhost:8080/api/ws/ticker');
       wsRef.current = ws;
       ws.onmessage = (e) => {
-        try { setTicker(JSON.parse(e.data)); } catch { }
+        try { setTicker(JSON.parse(e.data)); } catch {}
       };
-      ws.onclose = () => {
-        retryTimer = setTimeout(connect, 5000); // retry after 5s
-      };
+      ws.onclose = () => { retryTimer = setTimeout(connect, 5000); };
       ws.onerror = () => ws?.close();
     };
 
     connect();
-    return () => {
-      ws?.close();
-      clearTimeout(retryTimer);
-    };
+    return () => { ws?.close(); clearTimeout(retryTimer); };
   }, []);
 
   useEffect(() => {
@@ -91,9 +88,22 @@ function AppInner() {
 
   const t = ticker;
 
+  const renderPage = () => {
+    switch (page) {
+      case 'dashboard':  return <Dashboard />;
+      case 'campaigns':  return <Campaigns />;
+      case 'content':    return <ContentGen />;
+      case 'analytics':  return <Analytics />;
+      case 'weather':    return <WeatherLive />;
+      case 'growers':    return <GrowerSegments />;
+      case 'models':     return <ModelScopes />;
+      default:           return <Dashboard />;
+    }
+  };
+
   return (
     <Routes>
-      {/* SuperTokens Pre-built UI routes (e.g. /auth, /auth/reset-password) */}
+      {/* SuperTokens Pre-built UI routes (/auth, /auth/reset-password) */}
       {getSuperTokensRoutesForReactRouterDom(reactRouterDom, [EmailPasswordPreBuiltUI])}
 
       {/* Protected App Routes */}
@@ -127,8 +137,12 @@ function AppInner() {
 
                 <div className="nav-divider" />
                 <div className="nav-group-label">System</div>
-                {SYS.map(({ label, Icon }) => (
-                  <div key={label} className="nav-item" style={{ opacity: 0.55, cursor: 'default' }}>
+                {SYS.map(({ id, label, Icon }) => (
+                  <div
+                    key={id}
+                    className={`nav-item ${page === id ? 'active' : ''}`}
+                    onClick={() => setPage(id)}
+                  >
                     <Icon size={15} />
                     {label}
                   </div>
@@ -165,10 +179,22 @@ function AppInner() {
               {/* Executive Global Header */}
               <header className="global-header">
                 <div className="global-header-ticker">
-                  <div className="ticker-item"><span className="ticker-label">PROTECTED REVENUE</span> <span className={`ticker-value ${t ? 'up' : ''}`}>{t?.protected_revenue ?? '--'}</span></div>
-                  <div className="ticker-item"><span className="ticker-label">ENGAGEMENT PULSE</span> <span className="ticker-value glow">{t?.engagement_pulse ?? '--'}</span></div>
-                  <div className="ticker-item"><span className="ticker-label">AI CONFIDENCE</span> <span className={`ticker-value ${t ? 'up' : ''}`}>{t?.ai_confidence ?? '--'}</span></div>
-                  <div className="ticker-item"><span className="ticker-label">WEATHER THREATS</span> <span className={`ticker-value ${t?.weather_threats !== '--' && Number(t?.weather_threats) > 0 ? 'down' : ''}`}>{t ? String(t.weather_threats) : '--'}</span></div>
+                  <div className="ticker-item">
+                    <span className="ticker-label">PROTECTED REVENUE</span>{' '}
+                    <span className={`ticker-value ${t ? 'up' : ''}`}>{t?.protected_revenue ?? '--'}</span>
+                  </div>
+                  <div className="ticker-item">
+                    <span className="ticker-label">ENGAGEMENT PULSE</span>{' '}
+                    <span className="ticker-value glow">{t?.engagement_pulse ?? '--'}</span>
+                  </div>
+                  <div className="ticker-item">
+                    <span className="ticker-label">AI CONFIDENCE</span>{' '}
+                    <span className={`ticker-value ${t ? 'up' : ''}`}>{t?.ai_confidence ?? '--'}</span>
+                  </div>
+                  <div className="ticker-item">
+                    <span className="ticker-label">WEATHER THREATS</span>{' '}
+                    <span className={`ticker-value ${Number(t?.weather_threats) > 0 ? 'down' : ''}`}>{t ? String(t.weather_threats) : '--'}</span>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                   <div className="theme-toggle" onClick={() => setIsLight(!isLight)}>
@@ -182,10 +208,7 @@ function AppInner() {
               </header>
 
               <div key={page} className="page-enter" style={{ height: 'calc(100% - 56px)', overflowY: 'auto' }}>
-                {page === 'dashboard' && <Dashboard />}
-                {page === 'campaigns' && <Campaigns />}
-                {page === 'content' && <ContentGen />}
-                {page === 'analytics' && <Analytics />}
+                {renderPage()}
               </div>
             </main>
           </div>

@@ -215,3 +215,32 @@ async def get_district_heatmap():
             for r in results
         ]
     }
+
+
+@router.get("/map-data")
+async def get_map_data():
+    """Raw grower locations for 3D Deck.gl visualization."""
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$district",
+                "count": {"$sum": 1},
+                "avg_farm_size": {"$avg": "$farm_size_acres"},
+                "state": {"$first": "$state"}
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": 500}
+    ]
+    results = await col_growers().aggregate(pipeline).to_list(length=500)
+    return {
+        "data": [
+            {
+                "district": r["_id"],
+                "count": r["count"],
+                "farm_size": round(r["avg_farm_size"] or 0, 2),
+                "state": r["state"]
+            }
+            for r in results
+        ]
+    }

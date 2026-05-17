@@ -17,6 +17,7 @@ export const api = {
   getFunnel: () => apiFetch('/api/analytics/funnel'),
   getTopProducts: () => apiFetch('/api/analytics/top-products'),
   getDistrictHeatmap: () => apiFetch('/api/analytics/district-heatmap'),
+  getMapData: () => apiFetch('/api/analytics/map-data'),
 
   // Growers
   getGrowers: (params?: Record<string, string>) => {
