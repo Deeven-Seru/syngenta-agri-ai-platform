@@ -8,7 +8,7 @@ import GrowerSegments from './pages/GrowerSegments';
 import ModelScopes from './pages/ModelScopes';
 import {
   IconGrid, IconTarget, IconEdit, IconBarChart,
-  IconLeaf, IconDatabase, IconCpu, IconSun,
+  IconLeaf, IconDatabase, IconCpu, IconSun, IconMoon
 } from './icons';
 import './index.css';
 
@@ -104,9 +104,14 @@ export default function App() {
             <div className="ticker-item"><span className="ticker-label">AI CONFIDENCE</span> <span className="ticker-value">--</span></div>
             <div className="ticker-item"><span className="ticker-label">WEATHER THREATS</span> <span className="ticker-value">--</span></div>
           </div>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            <button className="theme-toggle" onClick={() => setIsLight(!isLight)} aria-label="Toggle theme">
-              {isLight ? <IconSun size={14} /> : <IconDatabase size={14} />} {isLight ? 'LIGHT' : 'DARK'}
+          <div className="global-header-actions">
+            <button
+              className="theme-toggle"
+              onClick={() => setIsLight(!isLight)}
+              aria-pressed={isLight}
+              aria-label="Toggle theme"
+            >
+              {isLight ? <IconSun size={14} /> : <IconMoon size={14} />} {isLight ? 'LIGHT' : 'DARK'}
             </button>
             <div className="live-indicator">
               <div className="live-dot" />
