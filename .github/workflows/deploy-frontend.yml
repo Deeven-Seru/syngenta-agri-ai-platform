@@ -43,10 +43,10 @@ jobs:
         working-directory: frontend
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          # Set this secret in GitHub → Settings → Secrets → Actions
+          # Set this repository variable in GitHub → Settings → Secrets and variables → Actions
           # to point at the deployed backend URL
           # e.g. https://your-backend.example.com
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: npm run build
 
       - name: Upload build artifact for Pages
