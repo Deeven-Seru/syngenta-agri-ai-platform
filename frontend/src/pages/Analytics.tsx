@@ -26,7 +26,7 @@ const INITIAL_VIEW_STATE = {
   longitude: 78.9629,
   latitude: 20.5937,
   zoom: 4,
-  pitch: 0,
+  pitch: 45,
   bearing: 0
 };
 
@@ -160,10 +160,10 @@ export default function Analytics() {
               <div className="map-overlay-legend" style={{ zIndex: 10 }}>
                 <div className="text-3 mb-2" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legend</div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#c8457c' }} />
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f26d4a' }} />
                   <span style={{ fontSize: 11 }}>Intensity Zone</span>
                 </div>
-                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Higher glow indicates higher intensity</div>
+                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Hotter color = higher activity</div>
               </div>
             </div>
           </div>
