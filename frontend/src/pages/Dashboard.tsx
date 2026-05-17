@@ -9,7 +9,7 @@ import {
   IconBarChart, IconGlobe, IconTrendUp, IconArrowUp,
 } from '../icons';
 
-const COLORS = ['#52b788','#40916c','#74c69d','#b7e4c7','#b5833a','#5a9cbd'];
+const COLORS = ['#00ED64', '#00A35C', '#00684A', '#023430', '#FFC010', '#369BFF'];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -149,8 +149,8 @@ export default function Dashboard() {
                     <XAxis dataKey="crop" tick={{ fontSize: 10.5, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10.5, fill: 'var(--text-3)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="open_rate"  name="Open Rate"  fill="#52b788" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                    <Bar dataKey="click_rate" name="Click Rate" fill="#b5833a" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                    <Bar dataKey="open_rate"  name="Open Rate"  fill="#00ED64" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="click_rate" name="Click Rate" fill="#016BF8" radius={[4, 4, 0, 0]} maxBarSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
