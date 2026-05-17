@@ -4,7 +4,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import DeckGL from '@deck.gl/react';
-import { HeatmapLayer, HexagonLayer } from '@deck.gl/aggregation-layers';
+import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { Map } from 'react-map-gl/maplibre';
 import { api } from '../api';
 import { 
@@ -53,7 +53,6 @@ export default function Analytics() {
   const [districts, setDistricts] = useState<any[]>([]);
   const [mapData, setMapData]     = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [mapMode, setMapMode]     = useState<'3d' | '2d'>('3d');
 
   useEffect(() => {
     Promise.all([api.getTopProducts(), api.getDistrictHeatmap(), api.getMapData()])
@@ -88,53 +87,30 @@ export default function Analytics() {
     },
     { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
   );
-  const weightRange = Math.max(1, weightStats.max - weightStats.min);
 
-  const layers = mapMode === '3d'
-    ? [
-        new HexagonLayer({
-          id: 'hex-density',
-          data: mapData,
-          getPosition: (d: any) => d.COORDINATES,
-          getElevationWeight: (d: any) => d.weight,
-          elevationScale: 1000,
-          extruded: true,
-          radius: 20000,
-          upperPercentile: 100,
-          coverage: 1,
-          pickable: true,
-          colorRange: [
-            [43, 30, 61],
-            [84, 39, 136],
-            [143, 49, 168],
-            [200, 69, 124],
-            [242, 109, 74],
-            [254, 187, 79]
-          ]
-        })
+  const layers = [
+    new HeatmapLayer({
+      id: 'heat-intensity',
+      data: mapData,
+      getPosition: (d: any) => d.COORDINATES,
+      getWeight: (d: any) => {
+        const w = Number(d.weight) || 0;
+        if (weightStats.max === weightStats.min) return w > 0 ? 1 : 0;
+        return (w - weightStats.min) / (weightStats.max - weightStats.min);
+      },
+      radiusPixels: 60,
+      intensity: 1.6,
+      threshold: 0.05,
+      colorRange: [
+        [43, 30, 61],
+        [84, 39, 136],
+        [143, 49, 168],
+        [200, 69, 124],
+        [242, 109, 74],
+        [254, 187, 79]
       ]
-    : [
-        new HeatmapLayer({
-          id: 'heat-intensity',
-          data: mapData,
-          getPosition: (d: any) => d.COORDINATES,
-          getWeight: (d: any) => {
-            const w = Number(d.weight) || 0;
-            return (w - weightStats.min) / weightRange;
-          },
-          radiusPixels: 60,
-          intensity: 1.6,
-          threshold: 0.05,
-          colorRange: [
-            [43, 30, 61],
-            [84, 39, 136],
-            [143, 49, 168],
-            [200, 69, 124],
-            [242, 109, 74],
-            [254, 187, 79]
-          ]
-        })
-      ];
+    })
+  ];
 
   if (loading) return (
     <div className="loading-page">
@@ -161,31 +137,17 @@ export default function Analytics() {
             <div className="card-head">
               <div className="card-label">
                 <IconMap size={13} />
-                {mapMode === '3d' ? '3D Density Map (Deck.gl + Carto)' : '2D Intensity Heatmap (Deck.gl + Carto)'}
+                2D Intensity Heatmap (Deck.gl + Carto)
               </div>
-              <div className={mapMode === '3d' ? 'badge badge-green' : 'badge badge-blue'}>
-                {mapMode === '3d' ? '3D Projection Live' : '2D Intensity Live'}
-              </div>
+              <div className="badge badge-blue">2D Intensity Live</div>
             </div>
             <div style={{ padding: 0, position: 'relative', height: 400, overflow: 'hidden', borderRadius: '0 0 12px 12px' }}>
-              <div style={{ position: 'absolute', right: 16, top: 12, zIndex: 12 }}>
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => setMapMode(mapMode === '3d' ? '2d' : '3d')}
-                >
-                  {mapMode === '3d' ? 'Switch to 2D Heatmap' : 'Switch to 3D Density'}
-                </button>
-              </div>
                 <DeckGL
                     initialViewState={INITIAL_VIEW_STATE}
                     controller={true}
                     layers={layers}
                     getTooltip={({ object }) => {
                         if (!object) return null;
-                        const pointCount = Array.isArray(object.points) ? object.points.length : 0;
-                        if (mapMode === '3d') {
-                          return pointCount > 0 ? `Density: ${pointCount} Districts in bin` : 'Density bin';
-                        }
                         if (object.position) return 'Intensity heat zone';
                         return 'Intensity heat zone';
                     }}
@@ -197,10 +159,10 @@ export default function Analytics() {
               <div className="map-overlay-legend" style={{ zIndex: 10 }}>
                 <div className="text-3 mb-2" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legend</div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#40916c' }} />
-                  <span style={{ fontSize: 11 }}>Density Zone</span>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f26d4a' }} />
+                  <span style={{ fontSize: 11 }}>Intensity Zone</span>
                 </div>
-                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Pitch to view 3D (Right-click + drag)</div>
+                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Hotter color = higher activity</div>
               </div>
             </div>
           </div>
