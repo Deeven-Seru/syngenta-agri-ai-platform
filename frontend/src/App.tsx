@@ -98,9 +98,9 @@ export default function App() {
             <div className="ticker-item"><span className="ticker-label">WEATHER THREATS</span> <span className="ticker-value">--</span></div>
           </div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            <div className="theme-toggle" onClick={() => setIsLight(!isLight)}>
+            <button className="theme-toggle" onClick={() => setIsLight(!isLight)} aria-label="Toggle theme">
               {isLight ? <IconSun size={14} /> : <IconDatabase size={14} />} {isLight ? 'LIGHT' : 'DARK'}
-            </div>
+            </button>
             <div className="live-indicator">
               <div className="live-dot" />
               AI SECURE LINK ACTIVE
