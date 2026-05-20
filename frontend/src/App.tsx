@@ -45,8 +45,8 @@ export default function App() {
             <IconLeaf size={16} />
           </div>
           <div>
-            <div className="brand-name">Agri-AI</div>
-            <div className="brand-sub">Syngenta India</div>
+            <div className="brand-name">Twig-life</div>
+            <div className="brand-sub">Agri-AI Platform</div>
           </div>
         </div>
 

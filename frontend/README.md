@@ -1,6 +1,6 @@
 # Frontend
 
-React 19 + Vite dashboard for the Syngenta Agri-AI Platform.
+React 19 + Vite dashboard for the Twig-life Agri-AI Platform.
 
 ## Run locally
 
