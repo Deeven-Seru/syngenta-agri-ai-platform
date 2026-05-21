@@ -104,7 +104,6 @@ CATEGORICAL_COLS = [
     "gender",
     "crop_stage",
 ]
-
 NUMERIC_COLS = [
     "grower_age",
     "farm_size_acres",
