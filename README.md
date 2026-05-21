@@ -2,7 +2,7 @@
   <img src="docs/assets/architecture.svg" alt="Syngenta Agri-AI Platform" width="720">
 </p>
 
-<h1 align="center">Syngenta Agri-AI Platform</h1>
+<h1 align="center">Twig Life</h1>
 <p align="center"><strong>Multimodal Marketing &amp; Conversational Intelligence</strong></p>
 
 <p align="center">
