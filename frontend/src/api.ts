@@ -46,4 +46,18 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
+
+  // New features added for Grower registration, Campaign launches, and Chatbot
+  createGrower: (data: object) => apiFetch('/api/growers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  launchCampaign: (id: string) => apiFetch(`/api/campaigns/${id}/launch`, {
+    method: 'POST',
+  }),
+  sendChatMessage: (phone_number: string, message: string) => apiFetch('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ phone_number, message }),
+  }),
 };
+

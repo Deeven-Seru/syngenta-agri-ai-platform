@@ -2,19 +2,31 @@
 FastAPI Main Application — Syngenta Agri-AI Platform
 """
 
+from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import structlog
 
 from database import connect_db, close_db
-from routers import campaigns, growers, analytics, weather, content, system, ticker
+from routers import (
+    campaigns,
+    growers,
+    analytics,
+    weather,
+    content,
+    system,
+    ticker,
+    chat,
+)
 
-from supertokens_python.framework.fastapi import get_middleware
+# SuperTokens
 from supertokens_python import get_all_cors_headers
+from supertokens_python.framework.fastapi import get_middleware
+
 from auth import init_supertokens
 
-# Initialize SuperTokens
+# Initialize SuperTokens BEFORE app creation
 init_supertokens()
 
 logger = structlog.get_logger()
@@ -23,8 +35,9 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("🌱 Syngenta Agri-AI Platform starting...")
+    logger.info("Syngenta Agri-AI Platform starting...")
     await connect_db()
+
     yield
 
     # Shutdown
@@ -41,30 +54,89 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS must be added BEFORE SuperTokens middleware
-# (Starlette: last added = outermost = executes first)
-# SuperTokens needs to be outermost to handle CORS for /auth/* routes
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization"] + get_all_cors_headers(),
-    expose_headers=get_all_cors_headers(),
-)
+# =========================================================
+# SUPERTOKENS MIDDLEWARE
+# =========================================================
 
-# SuperTokens middleware — outermost (handles /auth/* CORS)
 app.add_middleware(get_middleware())
 
-# Register routers
-app.include_router(campaigns.router, prefix="/api/campaigns", tags=["Campaigns"])
-app.include_router(growers.router, prefix="/api/growers", tags=["Growers"])
-app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
-app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])
-app.include_router(content.router, prefix="/api/content", tags=["Content Generation"])
-app.include_router(system.router, prefix="/api/system", tags=["System"])
-app.include_router(ticker.router, prefix="/api", tags=["Real-Time Ticker"])
+# =========================================================
+# CORS CONFIGURATION
+# =========================================================
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=[
+        "content-type",
+        *get_all_cors_headers(),
+    ],
+    expose_headers=[
+        "front-token",
+        *get_all_cors_headers(),
+    ],
+)
+
+# =========================================================
+# ROUTERS
+# =========================================================
+
+app.include_router(
+    campaigns.router,
+    prefix="/api/campaigns",
+    tags=["Campaigns"],
+)
+
+app.include_router(
+    growers.router,
+    prefix="/api/growers",
+    tags=["Growers"],
+)
+
+app.include_router(
+    analytics.router,
+    prefix="/api/analytics",
+    tags=["Analytics"],
+)
+
+app.include_router(
+    weather.router,
+    prefix="/api/weather",
+    tags=["Weather"],
+)
+
+app.include_router(
+    content.router,
+    prefix="/api/content",
+    tags=["Content Generation"],
+)
+
+app.include_router(
+    system.router,
+    prefix="/api/system",
+    tags=["System"],
+)
+
+app.include_router(
+    ticker.router,
+    prefix="/api",
+    tags=["Real-Time Ticker"],
+)
+
+app.include_router(
+    chat.router,
+    prefix="/api/chat",
+    tags=["Chat"],
+)
+
+# =========================================================
+# ROOT ROUTES
+# =========================================================
 
 @app.get("/", tags=["Health"])
 async def root():
@@ -78,4 +150,6 @@ async def root():
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy"
+    }

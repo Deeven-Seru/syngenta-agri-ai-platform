@@ -7,7 +7,7 @@ GET  /api/campaigns               → List all campaigns
 GET  /api/campaigns/{id}          → Get campaign details + scores
 GET  /api/campaigns/{id}/targets  → Get ranked target growers
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
@@ -15,8 +15,13 @@ import uuid
 import asyncio
 
 from database import col_growers, col_campaigns, col_model_scores, col_inventory
+from config import get_settings
 from services.receptivity_service import score_growers
-from services.campaign_service import dispatch_twilio_messages
+from services.campaign_service import (
+    dispatch_twilio_messages,
+    subscribe_dispatch,
+    unsubscribe_dispatch,
+)
 
 router = APIRouter()
 
@@ -287,9 +292,7 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
     Launch: dispatch the queue via Twilio in the background.
     """
     settings = get_settings()
-    if not settings.twilio_account_sid or not settings.twilio_auth_token:
-        raise HTTPException(status_code=500, detail="Twilio credentials not configured")
-        
+    
     campaign = await col_campaigns().find_one({"_id": campaign_id})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -311,5 +314,23 @@ async def launch_campaign(campaign_id: str, background_tasks: BackgroundTasks):
 
     return {
         "campaign_id": campaign_id,
-        "status": "launching"
+        "status": "launching",
+        "is_simulation": not settings.twilio_account_sid or not settings.twilio_auth_token
     }
+
+
+@router.websocket("/{campaign_id}/dispatch-ws")
+async def campaign_dispatch_websocket(websocket: WebSocket, campaign_id: str):
+    await websocket.accept()
+    queue = subscribe_dispatch(campaign_id)
+    try:
+        while True:
+            event = await queue.get()
+            await websocket.send_json(event)
+            if event.get("type") == "complete":
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        unsubscribe_dispatch(campaign_id, queue)
+

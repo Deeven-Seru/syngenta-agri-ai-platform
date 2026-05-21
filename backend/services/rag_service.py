@@ -91,30 +91,28 @@ async def search_knowledge(query_embedding: list[float], district: str, grower_i
         # Fallback to a simple keyword search or empty list if index not ready
         return []
 
-async def generate_grounded_answer(phone_number: str, question: str) -> str:
+async def generate_grounded_answer(phone_number: str, question: str):
     settings = get_settings()
-    groq_client = AsyncGroq(api_key=settings.groq_api_key)
-    
-    # Normalize phone: strip '+' and 'whatsapp:'
-    clean_phone = phone_number.replace("whatsapp:", "").replace("+", "")
-    
-    # 1. Identify Grower (consolidated query for efficiency)
-    grower = await col_growers().find_one({
-        "$or": [
-            {"_id": clean_phone}, 
-            {"phone": clean_phone},
-            {"_id": phone_number},
-            {"phone": phone_number}
-        ]
-    })
-        
+    grower = await col_growers().find_one({"$or": [{"_id": phone_number}, {"phone": phone_number}]})
     grower_context = ""
     district = "unknown"
+    crop = "unknown"
+    stage = "unknown"
     if grower:
         district = grower.get("district", "unknown")
         crop = grower.get("primary_crop", "unknown")
         stage = grower.get("crop_calendar", {}).get("current_stage", "unknown")
         grower_context = f"The farmer is growing {crop}, currently at the {stage} stage in {district} district."
+        
+    if not settings.groq_api_key or not settings.gemini_api_key:
+        logger.info("Simulation mode: Groq/Gemini keys not configured. Generating simulated response.")
+        lowered_q = question.lower()
+        if "tilt" in lowered_q or "amistar" in lowered_q or "score" in lowered_q:
+            rec = "Tilt 250 EC" if "tilt" in lowered_q else ("Amistar 250 SC" if "amistar" in lowered_q else "Score 250 EC")
+            return f"[SIMULATION] Grounded Context Active: For your {crop} ({stage} stage) in {district}, we recommend applying {rec} to protect from disease threats. Maintain recommended dosage and water levels."
+        return f"[SIMULATION] Grounded Context Active: Based on your grower profile in {district}, you are growing {crop} at the {stage} stage. For optimal crop growth, ensure proper soil fertilization and pest monitoring."
+
+    groq_client = AsyncGroq(api_key=settings.groq_api_key)
     
     # 2. Vector Search
     embedding = await get_embedding(question)

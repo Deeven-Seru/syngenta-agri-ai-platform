@@ -6,6 +6,7 @@ Campaign Dispatch Service — Twilio Messaging & IVR
 """
 import asyncio
 from datetime import datetime, timezone
+from typing import Dict, List
 import structlog
 from twilio.rest import Client
 from database import col_growers, col_campaigns, col_model_scores, col_autonomous_campaigns
@@ -14,9 +15,43 @@ from services.weather_service import get_district_weather
 
 logger = structlog.get_logger()
 
+# Active WebSocket subscriber queues mapped by campaign_id
+dispatch_subscribers: Dict[str, List[asyncio.Queue]] = {}
+
+
+def subscribe_dispatch(campaign_id: str) -> asyncio.Queue:
+    queue = asyncio.Queue()
+    if campaign_id not in dispatch_subscribers:
+        dispatch_subscribers[campaign_id] = []
+    dispatch_subscribers[campaign_id].append(queue)
+    logger.info("New WebSocket subscriber registered for campaign", campaign_id=campaign_id)
+    return queue
+
+
+def unsubscribe_dispatch(campaign_id: str, queue: asyncio.Queue):
+    if campaign_id in dispatch_subscribers:
+        if queue in dispatch_subscribers[campaign_id]:
+            dispatch_subscribers[campaign_id].remove(queue)
+        if not dispatch_subscribers[campaign_id]:
+            del dispatch_subscribers[campaign_id]
+    logger.info("WebSocket subscriber unregistered for campaign", campaign_id=campaign_id)
+
+
+async def broadcast_dispatch_event(campaign_id: str, event: dict):
+    if campaign_id in dispatch_subscribers:
+        for queue in dispatch_subscribers[campaign_id]:
+            await queue.put(event)
+
+
 async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, settings):
     """Background task to send Twilio messages without blocking the API."""
-    twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+    is_simulation = not settings.twilio_account_sid or not settings.twilio_auth_token
+    
+    if is_simulation:
+        logger.info("Twilio credentials not set. Launching campaign in SIMULATION mode.", campaign_id=campaign_id)
+        twilio_client = None
+    else:
+        twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
     
     # Get campaign details for product name
     campaign = await col_campaigns().find_one({"_id": campaign_id})
@@ -26,13 +61,12 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     product = campaign.get("product", "Syngenta Solution")
     
     # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(10 if not is_simulation else 2)
     
     sent_count = 0
     errors = 0
 
     # Cache for generated messages to avoid redundant Gemini calls
-    # Key: (language, device, district)
     message_cache = {}
     
     # Pre-fetch weather for all districts in the campaign to avoid redundant API calls
@@ -42,6 +76,14 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         from services.weather_service import get_bulk_district_weather
         weather_cache = await get_bulk_district_weather(unique_districts)
 
+    # Get total targets count for logging and websocket percentage tracking
+    total_targets = await col_model_scores().count_documents({"campaign_id": campaign_id})
+    await broadcast_dispatch_event(campaign_id, {
+        "type": "start",
+        "campaign_id": campaign_id,
+        "total": total_targets
+    })
+
     # Stream targets to avoid memory limits, sorted by receptivity_score
     cursor = col_model_scores().find({"campaign_id": campaign_id}).sort([("receptivity_score", -1)])
     
@@ -50,12 +92,15 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         async with semaphore:
             grower_id = target.get("grower_id")
             g_doc = grower_map.get(grower_id)
-            if not g_doc or not g_doc.get("phone"):
+            
+            # For testing/demo, if we don't have a phone field, fallback to the grower_id itself
+            phone = (g_doc.get("phone") or g_doc.get("_id") or grower_id) if g_doc else grower_id
+            
+            if not phone:
                 return
 
-            phone = g_doc["phone"]
             device = target.get("device_type", "smartphone")
-            lang = g_doc.get("language", "Hindi")
+            lang = (g_doc.get("language") or target.get("language") or "Hindi") if g_doc else "Hindi"
             district = target.get("district", "Unknown")
             
             # Map DB language to Twilio voice code
@@ -106,39 +151,59 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
                 msg_text = f"Greetings from Syngenta. Check your {campaign_crop} crop."
 
             try:
-                if device == "smartphone":
-                    await asyncio.to_thread(
-                        twilio_client.messages.create,
-                        from_=settings.twilio_whatsapp_from,
-                        body=msg_text,
-                        to=f"whatsapp:{phone}"
-                    )
+                if is_simulation:
+                    # SIMULATION MODE: artificial delay
+                    await asyncio.sleep(0.3)
+                    sent_count += 1
+                    status = "success"
+                    log_msg = f"[SIMULATION] Message successfully sent to {phone} ({lang}, {device})"
                 else:
-                    await asyncio.to_thread(
-                        twilio_client.calls.create,
-                        from_=settings.twilio_phone_number,
-                        to=phone,
-                        twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
-                    )
-                sent_count += 1
+                    if device == "smartphone":
+                        await asyncio.to_thread(
+                            twilio_client.messages.create,
+                            from_=settings.twilio_whatsapp_from,
+                            body=msg_text,
+                            to=f"whatsapp:{phone}"
+                        )
+                    else:
+                        await asyncio.to_thread(
+                            twilio_client.calls.create,
+                            from_=settings.twilio_phone_number,
+                            to=phone,
+                            twiml=f'<Response><Say language="{voice_lang}">{msg_text}</Say></Response>'
+                        )
+                    sent_count += 1
+                    status = "success"
+                    log_msg = f"Message sent to {phone} via {'WhatsApp' if device == 'smartphone' else 'Voice Call'}"
             except Exception as e:
                 logger.error("Twilio dispatch failed", error=str(e), grower_id=grower_id)
                 errors += 1
+                status = "error"
+                log_msg = f"Failed sending to {phone}: {str(e)}"
+            
+            # Broadcast progress update to websocket subscribers
+            await broadcast_dispatch_event(campaign_id, {
+                "type": "progress",
+                "campaign_id": campaign_id,
+                "sent": sent_count,
+                "errors": errors,
+                "total": total_targets,
+                "phone": phone,
+                "grower_id": grower_id,
+                "status": status,
+                "log": log_msg
+            })
 
     # Process targets in batches of 100 to balance speed and memory
     batch = []
     async for target in cursor:
         batch.append(target)
         if len(batch) >= 100:
-            # Bulk fetch growers for this batch (filtering None)
             batch_grower_ids = list(set(t.get("grower_id") for t in batch if t.get("grower_id")))
             growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
             batch_grower_map = {g["_id"]: g for g in growers}
             
-            if not batch_grower_map:
-                logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
-            else:
-                await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
             batch = []
     
     if batch:
@@ -146,10 +211,7 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         growers = await col_growers().find({"_id": {"$in": batch_grower_ids}}).to_list(length=len(batch_grower_ids))
         batch_grower_map = {g["_id"]: g for g in growers}
         
-        if not batch_grower_map:
-            logger.warning("Batch grower lookup returned no results", grower_count=len(batch_grower_ids))
-        else:
-            await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
+        await asyncio.gather(*(send_one(t, batch_grower_map) for t in batch))
 
     # Final updates with ISO string timestamps
     now = datetime.now(timezone.utc).isoformat()
@@ -165,3 +227,13 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     # Sync update for autonomous tracker if applicable
     if campaign.get("is_autonomous"):
         await col_autonomous_campaigns().update_one({"_id": campaign_id}, {"$set": status_update})
+
+    # Broadcast completed status to websocket subscribers
+    await broadcast_dispatch_event(campaign_id, {
+        "type": "complete",
+        "campaign_id": campaign_id,
+        "sent": sent_count,
+        "errors": errors,
+        "total": total_targets
+    })
+

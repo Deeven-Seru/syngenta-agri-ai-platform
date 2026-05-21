@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { api } from '../api';
 import {
-  IconUsers, IconActivity, IconTarget, IconZap,
+  IconActivity, IconTarget, IconZap,
   IconBarChart, IconGlobe, IconTrendUp, IconArrowUp,
 } from '../icons';
 

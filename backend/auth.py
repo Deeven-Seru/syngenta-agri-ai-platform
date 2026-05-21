@@ -1,9 +1,14 @@
-from supertokens_python import init, InputAppInfo, SupertokensConfig
+from supertokens_python import (
+    init,
+    InputAppInfo,
+    SupertokensConfig,
+)
+
 from supertokens_python.recipe import (
     emailpassword,
     session,
     userroles,
-    jwt
+    jwt,
 )
 
 from config import get_settings
@@ -15,10 +20,10 @@ def init_supertokens():
     init(
         app_info=InputAppInfo(
             app_name=settings.app_name,
-            api_domain=settings.api_domain,
-            website_domain=settings.website_domain,
-            api_base_path=settings.api_base_path,
-            website_base_path=settings.website_base_path
+            api_domain="http://localhost:8080",
+            website_domain="http://localhost:5173",
+            api_base_path="/auth",
+            website_base_path="/auth",
         ),
 
         supertokens_config=SupertokensConfig(
@@ -26,12 +31,12 @@ def init_supertokens():
             api_key=settings.supertokens_api_key,
         ),
 
-        framework='fastapi',
+        framework="fastapi",
 
         recipe_list=[
             session.init(
                 cookie_secure=False,
-                session_expired_status_code=401
+                session_expired_status_code=401,
             ),
 
             emailpassword.init(),
@@ -41,7 +46,7 @@ def init_supertokens():
             jwt.init(),
         ],
 
-        mode='asgi'
+        mode="asgi",
     )
 
 
@@ -50,15 +55,15 @@ def get_role_definitions():
         "Marketing Admin": [
             "create:campaigns",
             "edit:content",
-            "view:analytics"
+            "view:analytics",
         ],
 
         "Field Officer": [
             "view:analytics",
-            "view:growers"
+            "view:growers",
         ],
 
         "System Auditor": [
-            "view:health"
-        ]
+            "view:health",
+        ],
     }

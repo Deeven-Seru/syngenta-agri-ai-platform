@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import {
   IconTarget, IconFilter, IconCheck, IconZap,
@@ -37,6 +37,96 @@ export default function Campaigns() {
   const [campaigns, setCampaigns]       = useState<any[]>([]);
   const [loadingList, setLoadingList]   = useState(false);
   const [activeTab, setActiveTab]       = useState<'create' | 'list'>('create');
+
+  // WebSocket Live Dispatch Console states
+  const [launchingCampaignId, setLaunchingCampaignId] = useState<string | null>(null);
+  const [launchingCampaignName, setLaunchingCampaignName] = useState<string | null>(null);
+  const [dispatchLogs, setDispatchLogs] = useState<string[]>([]);
+  const [dispatchProgress, setDispatchProgress] = useState({ sent: 0, failed: 0, total: 0, percent: 0 });
+  const [isDispatching, setIsDispatching] = useState(false);
+
+  useEffect(() => {
+    const term = document.getElementById('dispatch-terminal');
+    if (term) {
+      term.scrollTop = term.scrollHeight;
+    }
+  }, [dispatchLogs]);
+
+  const handleLaunch = (campaignId: string, campaignName: string) => {
+    setLaunchingCampaignId(campaignId);
+    setLaunchingCampaignName(campaignName);
+    setDispatchLogs(['Initializing live socket connection...']);
+    setDispatchProgress({ sent: 0, failed: 0, total: 0, percent: 0 });
+    setIsDispatching(true);
+
+    const wsUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080')
+      .replace(/^http/, 'ws') + `/api/campaigns/${campaignId}/dispatch-ws`;
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setDispatchLogs(prev => [...prev, 'Connected to WebSocket. Dispatching campaign...']);
+      api.launchCampaign(campaignId)
+        .catch(err => {
+          setDispatchLogs(prev => [...prev, `ERROR: Launch trigger failed: ${err.message}`]);
+          setIsDispatching(false);
+        });
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'start') {
+          setDispatchProgress(prev => ({
+            ...prev,
+            total: data.total,
+            sent: 0,
+            failed: 0,
+            percent: 0
+          }));
+          setDispatchLogs(prev => [...prev, `Started dispatch. Total targets: ${data.total}`]);
+        } else if (data.type === 'progress') {
+          setDispatchProgress(prev => {
+            const sent = data.sent ?? prev.sent;
+            const failed = data.errors ?? prev.failed;
+            const total = prev.total || 1;
+            const percent = Math.round(((sent + failed) / total) * 100);
+            return { ...prev, sent, failed, percent };
+          });
+          if (data.log) {
+            setDispatchLogs(prev => [...prev, data.log]);
+          }
+        } else if (data.type === 'complete') {
+          setDispatchProgress(prev => {
+            const sent = data.sent ?? prev.sent;
+            const failed = data.errors ?? prev.failed;
+            const total = prev.total || 1;
+            const percent = Math.round(((sent + failed) / total) * 100);
+            return { ...prev, sent, failed, percent };
+          });
+          setDispatchLogs(prev => [...prev, 'Campaign dispatch completed successfully.']);
+          setIsDispatching(false);
+          ws.close();
+        } else if (data.type === 'error') {
+          setDispatchLogs(prev => [...prev, `ERROR: ${data.message}`]);
+          setIsDispatching(false);
+          ws.close();
+        }
+      } catch {
+        setDispatchLogs(prev => [...prev, `Failed to parse message: ${event.data}`]);
+      }
+    };
+
+    ws.onerror = () => {
+      setDispatchLogs(prev => [...prev, 'WebSocket error occurred. Connection lost.']);
+      setIsDispatching(false);
+    };
+
+    ws.onclose = () => {
+      setDispatchLogs(prev => [...prev, 'WebSocket connection closed.']);
+      setIsDispatching(false);
+    };
+  };
 
   const loadCampaigns = async () => {
     setLoadingList(true);
@@ -115,6 +205,7 @@ export default function Campaigns() {
                     <th>Est. Clicks</th>
                     <th>AI Lift</th>
                     <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -134,11 +225,29 @@ export default function Campaigns() {
                         </span>
                       </td>
                       <td><span className="badge badge-blue">{c.status}</span></td>
+                      <td>
+                        {c.status !== 'launched' ? (
+                          <button
+                            className="btn btn-primary btn-xs"
+                            onClick={() => handleLaunch(c.id, c.name)}
+                          >
+                            Launch
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            style={{ opacity: 0.5 }}
+                            disabled
+                          >
+                            Dispatched
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {!campaigns.length && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div className="empty-state">
                           <IconTarget size={28} />
                           <p>No campaigns yet. Create one above.</p>
@@ -336,6 +445,16 @@ export default function Campaigns() {
                         <><IconMessage size={14} /> Generate Vernacular Messages</>
                       )}
                     </button>
+
+                    {messages.length > 0 && (
+                      <button
+                        className="btn btn-primary w-full mt-2 animate-pulse"
+                        style={{ justifyContent: 'center', background: 'var(--teal-strong)', borderColor: 'var(--teal)' }}
+                        onClick={() => handleLaunch(result.campaign_id, form.campaign_name)}
+                      >
+                        <IconZap size={14} /> Launch Campaign Live
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -434,6 +553,131 @@ export default function Campaigns() {
           </div>
         )}
       </div>
+
+      {/* Real-time Dispatch Console Modal */}
+      {launchingCampaignId && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(8px)',
+          display: 'grid',
+          placeItems: 'center',
+          zIndex: 20000,
+          padding: 24,
+        }}>
+          <div className="card animate-fade-in" style={{
+            width: '100%',
+            maxWidth: 640,
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid var(--teal)',
+            boxShadow: '0 8px 32px var(--teal-glow)',
+          }}>
+            <div className="card-head">
+              <div className="card-label">
+                <IconZap className="text-teal animate-pulse" size={16} />
+                Real-Time Campaign Dispatch Console
+              </div>
+              {!isDispatching && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setLaunchingCampaignId(null);
+                    setLaunchingCampaignName(null);
+                    if (activeTab === 'list') {
+                      loadCampaigns();
+                    }
+                  }}
+                >
+                  Close Console
+                </button>
+              )}
+            </div>
+            <div style={{ padding: 20, flex: 1, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>{launchingCampaignName}</h3>
+                <span className="text-3 font-mono" style={{ fontSize: 11 }}>ID: {launchingCampaignId}</span>
+              </div>
+
+              {/* Progress and Counters */}
+              <div className="grid-3" style={{ gap: 12 }}>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                  <div className="text-3" style={{ fontSize: 11, marginBottom: 4 }}>TOTAL TARGETS</div>
+                  <div style={{ fontSize: 24, fontWeight: 700 }}>{dispatchProgress.total}</div>
+                </div>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                  <div className="text-3" style={{ fontSize: 11, marginBottom: 4, color: 'var(--green-hi)' }}>DISPATCHED (OK)</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--green-hi)' }}>{dispatchProgress.sent}</div>
+                </div>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                  <div className="text-3" style={{ fontSize: 11, marginBottom: 4, color: 'var(--red-hi)' }}>FAILED</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--red-hi)' }}>{dispatchProgress.failed}</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div>
+                <div className="flex justify-between text-3" style={{ fontSize: 11, marginBottom: 6 }}>
+                  <span>Dispatch Status: {isDispatching ? 'Streaming logs...' : 'Completed'}</span>
+                  <span>{dispatchProgress.percent}%</span>
+                </div>
+                <div style={{ height: 6, background: 'var(--bg-surface)', borderRadius: 3, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{
+                    width: `${dispatchProgress.percent}%`,
+                    height: '100%',
+                    background: 'linear-gradient(90deg, var(--teal), var(--green))',
+                    transition: 'width 0.2s ease',
+                  }} />
+                </div>
+              </div>
+
+              {/* Terminal Logs Panel */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 200 }}>
+                <div className="text-3" style={{ fontSize: 11, marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>LIVE DISPATCH FEED</span>
+                  {isDispatching && <div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderColor: 'var(--border-med)', borderTopColor: 'var(--teal)' }} />}
+                </div>
+                <div
+                  id="dispatch-terminal"
+                  style={{
+                    flex: 1,
+                    background: '#0d0e12',
+                    border: '1px solid #1a1e26',
+                    borderRadius: 6,
+                    padding: 12,
+                    fontFamily: 'Consolas, Monaco, "Andale Mono", monospace',
+                    fontSize: 11,
+                    color: '#a9b1d6',
+                    overflowY: 'auto',
+                    lineHeight: '1.6',
+                    maxHeight: 250,
+                  }}
+                >
+                  {dispatchLogs.map((log, index) => {
+                    let color = '#a9b1d6';
+                    if (log.startsWith('ERROR:') || log.includes('Failed')) color = 'var(--red-hi)';
+                    else if (log.includes('Successfully sent') || log.startsWith('Completed') || log.includes('Success') || log.includes('successfully sent') || log.includes('Message sent')) color = 'var(--green-hi)';
+                    else if (log.startsWith('Initializing') || log.startsWith('Connected') || log.includes('Started')) color = 'var(--teal-hi)';
+
+                    return (
+                      <div key={index} style={{ color, borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: 2 }}>
+                        <span style={{ color: '#565f89', marginRight: 8 }}>[{new Date().toLocaleTimeString()}]</span>
+                        {log}
+                      </div>
+                    );
+                  })}
+                  <div id="terminal-end" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

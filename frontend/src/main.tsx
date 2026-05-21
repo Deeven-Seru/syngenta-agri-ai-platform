@@ -11,7 +11,8 @@ initSuperTokens();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SuperTokensWrapper>
-      <BrowserRouter>
+      {/* basename must match Vite's base config to prevent infinite auth redirect loops */}
+      <BrowserRouter basename="/syngenta-agri-ai-platform">
         <App />
       </BrowserRouter>
     </SuperTokensWrapper>
