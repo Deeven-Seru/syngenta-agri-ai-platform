@@ -28,4 +28,6 @@ async def chat_message(req: ChatRequest):
         response_text = await generate_grounded_answer(req.phone_number, req.message)
         return ChatResponse(response=response_text)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import logging
+        logging.getLogger("chat").error(f"Error in chat endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred while processing the chat message.")

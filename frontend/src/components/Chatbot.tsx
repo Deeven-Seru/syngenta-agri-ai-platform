@@ -13,14 +13,34 @@ export default function Chatbot() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Listen for open-chatbot event
+  useEffect(() => {
+    const handleOpenChat = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setIsOpen(true);
+      if (customEvent.detail?.phone) {
+        const phone = customEvent.detail.phone;
+        setSelectedPhone(phone);
+        setMessages(prev => [
+          ...prev,
+          { sender: 'assistant', text: `Context shifted to grower +${phone}. How can I assist with this grower's crop status?` }
+        ]);
+      }
+    };
+    window.addEventListener('open-chatbot', handleOpenChat);
+    return () => {
+      window.removeEventListener('open-chatbot', handleOpenChat);
+    };
+  }, []);
+
   // Fetch growers to populate context selector
   useEffect(() => {
-    if (isOpen && growers.length === 0) {
+    if (isOpen) {
       api.getGrowers({ limit: '100' })
         .then(res => {
           if (res && res.growers) {
             setGrowers(res.growers);
-            if (res.growers.length > 0) {
+            if (res.growers.length > 0 && !selectedPhone) {
               // Prefer phone field, fallback to grower_id or _id
               setSelectedPhone(res.growers[0].phone || res.growers[0].grower_id);
             }

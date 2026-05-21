@@ -116,12 +116,21 @@ async def create_grower(req: GrowerCreateRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Grower with this phone number already registered")
     
+    now = datetime.utcnow()
+    if 6 <= now.month <= 10:
+        season_name = f"Kharif_{now.year}"
+    elif 11 <= now.month or now.month <= 4:
+        start_year = now.year if now.month >= 11 else now.year - 1
+        season_name = f"Rabi_{start_year}-{str(start_year + 1)[2:]}"
+    else:
+        season_name = f"Zaid_{now.year}"
+
     crop_calendar = {
         "crop": req.primary_crop,
         "current_stage": req.current_stage,
-        "season": "Kharif_2026",
+        "season": season_name,
         "stages": [
-            {"stage": req.current_stage, "approx": datetime.utcnow().strftime("%Y-%m-%d")}
+            {"stage": req.current_stage, "approx": now.strftime("%Y-%m-%d")}
         ]
     }
     

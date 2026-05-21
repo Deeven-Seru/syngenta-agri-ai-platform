@@ -63,13 +63,15 @@ function DashboardLayout() {
     let ws: WebSocket | null = null;
     let retryTimer: ReturnType<typeof setTimeout>;
 
-    fetch('http://localhost:8080/api/ticker')
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    fetch(`${apiBase}/api/ticker`)
       .then(r => r.json())
       .then(setTicker)
       .catch(() => {});
 
     const connect = () => {
-      ws = new WebSocket('ws://localhost:8080/api/ws/ticker');
+      const wsUrl = apiBase.replace(/^http/, 'ws') + '/api/ws/ticker';
+      ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.onmessage = (e) => { try { setTicker(JSON.parse(e.data)); } catch {} };
       ws.onclose = () => { retryTimer = setTimeout(connect, 5000); };

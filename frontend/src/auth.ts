@@ -6,8 +6,8 @@ export function initSuperTokens() {
   SuperTokens.init({
     appInfo: {
       appName: "Syngenta Command Center",
-      apiDomain: "http://localhost:8080",
-      websiteDomain: "http://localhost:5173",
+      apiDomain: import.meta.env.VITE_API_URL || "http://localhost:8080",
+      websiteDomain: import.meta.env.VITE_WEBSITE_URL || window.location.origin,
       apiBasePath: "/auth",
       websiteBasePath: "/auth"
     },

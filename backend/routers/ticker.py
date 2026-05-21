@@ -49,10 +49,9 @@ async def ticker_websocket(websocket: WebSocket):
             data = await get_ticker_data()
             await websocket.send_text(json.dumps(data))
             await asyncio.sleep(30)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("ticker").error(f"Unexpected error in ticker WebSocket: {e}", exc_info=True)
 
 
 @router.get("/ticker")

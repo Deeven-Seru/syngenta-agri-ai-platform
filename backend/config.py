@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     api_base_path: str = "/auth"
     website_base_path: str = "/auth"
 
+    # Redis (for distributed WS pub/sub scaling)
+    redis_url: str = ""
+
     # App
     app_port: int = 8080
     environment: str = "production"

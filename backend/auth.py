@@ -20,8 +20,8 @@ def init_supertokens():
     init(
         app_info=InputAppInfo(
             app_name=settings.app_name,
-            api_domain="http://localhost:8080",
-            website_domain="http://localhost:5173",
+            api_domain=settings.api_domain,
+            website_domain=settings.website_domain,
             api_base_path="/auth",
             website_base_path="/auth",
         ),
@@ -35,7 +35,7 @@ def init_supertokens():
 
         recipe_list=[
             session.init(
-                cookie_secure=False,
+                cookie_secure=settings.environment == "production",
                 session_expired_status_code=401,
             ),
 

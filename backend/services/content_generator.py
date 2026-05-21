@@ -37,7 +37,12 @@ def get_client():
     global _client
     if _client is None:
         settings = get_settings()
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        if not settings.gemini_api_key:
+            return None
+        try:
+            _client = genai.Client(api_key=settings.gemini_api_key)
+        except Exception:
+            return None
     return _client
 
 
@@ -74,6 +79,8 @@ async def generate_whatsapp_message(
     farmer_name: Optional[str] = None,
 ) -> dict:
     client = get_client()
+    if client is None:
+        return _template_message(grower_language, crop, product, crop_stage)
 
     lang_label = LANGUAGE_PROMPTS.get(grower_language, "Hindi")
     product_desc = PRODUCT_INFO.get(product, product)
@@ -179,6 +186,8 @@ async def generate_batch_messages(growers: list[dict]) -> list[dict]:
 
 async def generate_campaign_summary(campaign_data: dict) -> str:
     client = get_client()
+    if client is None:
+        return f"Campaign {campaign_data.get('name', '')} targeted {campaign_data.get('total_targets', 0)} growers for {campaign_data.get('crop', '')}. Under template mode, standard marketing messages were dispatched."
     prompt = f"""You are a marketing analyst for Syngenta India.
 Write a 3-sentence executive summary of this campaign performance data.
 Be specific about numbers. Suggest 1 concrete improvement action.
@@ -197,6 +206,9 @@ async def generate_voice_script(
 ) -> str:
     """Generates a short script for an automated voice call (IVR)."""
     client = get_client()
+    if client is None:
+        tpl_msg = _template_message(grower_language, crop, product, crop_stage)
+        return tpl_msg.get("message_native")
     lang_label = LANGUAGE_PROMPTS.get(grower_language, "Hindi")
     
     prompt = f"""You are a Syngenta India advisor calling a farmer.

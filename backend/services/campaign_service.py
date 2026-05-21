@@ -5,6 +5,7 @@ Campaign Dispatch Service — Twilio Messaging & IVR
 - Generates hyper-local vernacular content on-the-fly.
 """
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Dict, List
 import structlog
@@ -12,11 +13,52 @@ from twilio.rest import Client
 from database import col_growers, col_campaigns, col_model_scores, col_autonomous_campaigns
 from services.content_generator import generate_whatsapp_message, generate_voice_script
 from services.weather_service import get_district_weather
+from config import get_settings
 
 logger = structlog.get_logger()
+settings = get_settings()
 
 # Active WebSocket subscriber queues mapped by campaign_id
 dispatch_subscribers: Dict[str, List[asyncio.Queue]] = {}
+
+# Active Redis subscription listener tasks
+redis_listeners: Dict[str, asyncio.Task] = {}
+redis_available = False
+redis_client = None
+
+if settings.redis_url:
+    try:
+        import redis.asyncio as aioredis
+        redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        redis_available = True
+        logger.info("Redis Pub/Sub configured successfully for WebSockets.")
+    except Exception as e:
+        logger.warning("Failed to initialize Redis client. Falling back to in-memory Pub/Sub", error=str(e))
+
+
+async def listen_redis_channel(campaign_id: str):
+    """Listens to campaign event broadcasts from Redis and distributes to local clients."""
+    if not redis_client:
+        return
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe(f"campaign:{campaign_id}")
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                try:
+                    data = json.loads(message["data"])
+                    if campaign_id in dispatch_subscribers:
+                        for queue in list(dispatch_subscribers[campaign_id]):
+                            await queue.put(data)
+                except Exception as ex:
+                    logger.error("Error decoding or forwarding Redis pub/sub message", error=str(ex))
+    except asyncio.CancelledError:
+        pass
+    except Exception as ex:
+        logger.error("Unexpected error in Redis pub/sub listener", error=str(ex))
+    finally:
+        await pubsub.unsubscribe(f"campaign:{campaign_id}")
+        await pubsub.close()
 
 
 def subscribe_dispatch(campaign_id: str) -> asyncio.Queue:
@@ -24,6 +66,12 @@ def subscribe_dispatch(campaign_id: str) -> asyncio.Queue:
     if campaign_id not in dispatch_subscribers:
         dispatch_subscribers[campaign_id] = []
     dispatch_subscribers[campaign_id].append(queue)
+    
+    # Start Redis listener task if not already listening
+    if redis_available and campaign_id not in redis_listeners:
+        task = asyncio.create_task(listen_redis_channel(campaign_id))
+        redis_listeners[campaign_id] = task
+        
     logger.info("New WebSocket subscriber registered for campaign", campaign_id=campaign_id)
     return queue
 
@@ -34,13 +82,41 @@ def unsubscribe_dispatch(campaign_id: str, queue: asyncio.Queue):
             dispatch_subscribers[campaign_id].remove(queue)
         if not dispatch_subscribers[campaign_id]:
             del dispatch_subscribers[campaign_id]
+            # Cancel Redis listener if we have no local subscribers
+            if campaign_id in redis_listeners:
+                redis_listeners[campaign_id].cancel()
+                del redis_listeners[campaign_id]
+                
     logger.info("WebSocket subscriber unregistered for campaign", campaign_id=campaign_id)
 
 
 async def broadcast_dispatch_event(campaign_id: str, event: dict):
-    if campaign_id in dispatch_subscribers:
-        for queue in dispatch_subscribers[campaign_id]:
-            await queue.put(event)
+    if redis_available and redis_client:
+        try:
+            await redis_client.publish(f"campaign:{campaign_id}", json.dumps(event))
+        except Exception as e:
+            logger.error("Failed to publish event to Redis", error=str(e))
+    else:
+        # Fallback to local in-memory pub/sub
+        if campaign_id in dispatch_subscribers:
+            for queue in list(dispatch_subscribers[campaign_id]):
+                await queue.put(event)
+
+
+# Global Semaphores to limit Twilio request concurrency across all campaign instances
+_global_twilio_semaphore = None
+_global_simulation_semaphore = None
+
+def get_twilio_semaphore(is_simulation: bool) -> asyncio.Semaphore:
+    global _global_twilio_semaphore, _global_simulation_semaphore
+    if is_simulation:
+        if _global_simulation_semaphore is None:
+            _global_simulation_semaphore = asyncio.Semaphore(2)
+        return _global_simulation_semaphore
+    else:
+        if _global_twilio_semaphore is None:
+            _global_twilio_semaphore = asyncio.Semaphore(10)
+        return _global_twilio_semaphore
 
 
 async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, settings):
@@ -61,7 +137,7 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
     product = campaign.get("product", "Syngenta Solution")
     
     # Concurrency limit to prevent overwhelming thread pool and hitting Twilio rate limits
-    semaphore = asyncio.Semaphore(10 if not is_simulation else 2)
+    semaphore = get_twilio_semaphore(is_simulation)
     
     sent_count = 0
     errors = 0
