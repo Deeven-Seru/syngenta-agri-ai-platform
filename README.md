@@ -2,7 +2,7 @@
   <img src="docs/assets/architecture.svg" alt="Syngenta Agri-AI Platform" width="720">
 </p>
 
-<h1 align="center">Syngenta Agri-AI Platform</h1>
+<h1 align="center">Twig Life</h1>
 <p align="center"><strong>Multimodal Marketing &amp; Conversational Intelligence</strong></p>
 
 <p align="center">
@@ -128,20 +128,34 @@ npm run dev
 - **Knowledge Ingestion:** `python backend/scripts/vectorize_knowledge.py` — indexes PDFs and product manuals into MongoDB Atlas.
 - **Model Training:** `python ml/train_model.py` — retrains the XGBoost receptivity model.
 
+### Deployment
+- **Frontend:** GitHub Pages via `.github/workflows/deploy-frontend.yml`
+- **Backend:** Render via `render.yaml`
+- **Guide:** `docs/operations/deployment.md`
+
 ---
 
 ## <img src="https://api.iconify.design/lucide/folder-tree.svg?color=%23f59e0b" width="20" height="20" style="vertical-align:middle"> Project Structure
 
 ```text
-├── backend/            # FastAPI Application
-│   ├── models/         # Pydantic Schemas
-│   ├── routers/        # API Endpoints (Campaigns, RAG, Voice)
-│   ├── services/       # Core Logic (Content Gen, Weather, RAG)
-│   └── scripts/        # Data Vectorization & Ingestion
-├── frontend/           # React + Vite + Deck.gl
-├── ml/                 # XGBoost Receptivity Model & Training
-└── docs/               # Architecture Specs & Design Docs
+├── backend/                # FastAPI application
+│   ├── routers/            # API endpoints
+│   ├── services/           # Core business logic
+│   └── scripts/            # Ingestion, vectorization, and DB utilities
+├── frontend/               # React + Vite dashboard
+├── ml/                     # Model artifacts and training pipeline
+├── docs/
+│   ├── submissions/        # Hackathon submission files and exports
+│   ├── release/            # Release metadata
+│   └── superpowers/        # Design notes and planning docs
+├── Dockerfile              # Backend container image
+└── release-please-config.json
 ```
+
+### Repo Hygiene
+- Keep the repository root limited to runtime entrypoints and project-wide config.
+- Put one-off documents, PDFs, and presentation exports under `docs/submissions/`.
+- Put operational helper scripts with the backend under `backend/scripts/`.
 
 ---
 

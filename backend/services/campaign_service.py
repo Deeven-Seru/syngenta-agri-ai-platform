@@ -168,13 +168,11 @@ async def dispatch_twilio_messages(campaign_id: str, campaign_crop: str, setting
         async with semaphore:
             grower_id = target.get("grower_id")
             g_doc = grower_map.get(grower_id)
-            
             # For testing/demo, if we don't have a phone field, fallback to the grower_id itself
             phone = (g_doc.get("phone") or g_doc.get("_id") or grower_id) if g_doc else grower_id
             
             if not phone:
                 return
-
             device = target.get("device_type", "smartphone")
             lang = (g_doc.get("language") or target.get("language") or "Hindi") if g_doc else "Hindi"
             district = target.get("district", "Unknown")

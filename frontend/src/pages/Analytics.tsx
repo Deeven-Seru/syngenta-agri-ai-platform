@@ -4,7 +4,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import DeckGL from '@deck.gl/react';
-import { HexagonLayer } from '@deck.gl/aggregation-layers';
+import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { Map } from 'react-map-gl/maplibre';
 import { api } from '../api';
 import { 
@@ -78,25 +78,36 @@ export default function Analytics() {
       .catch(() => setLoading(false));
   }, []);
 
+  const weightStats = mapData.reduce(
+    (acc, d: any) => {
+      const w = Number(d.weight) || 0;
+      if (w < acc.min) acc.min = w;
+      if (w > acc.max) acc.max = w;
+      return acc;
+    },
+    { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
+  );
+
   const layers = [
-    new HexagonLayer({
-      id: 'heatmap',
+    new HeatmapLayer({
+      id: 'heat-intensity',
       data: mapData,
       getPosition: (d: any) => d.COORDINATES,
-      getElevationWeight: (d: any) => d.weight,
-      elevationScale: 1000,
-      extruded: true,
-      radius: 20000,         
-      upperPercentile: 100,
-      coverage: 1,
-      pickable: true,
+      getWeight: (d: any) => {
+        const w = Number(d.weight) || 0;
+        if (weightStats.max === weightStats.min) return w > 0 ? 1 : 0;
+        return (w - weightStats.min) / (weightStats.max - weightStats.min);
+      },
+      radiusPixels: 60,
+      intensity: 1.6,
+      threshold: 0.05,
       colorRange: [
-        [64, 145, 108],
-        [82, 183, 136],
-        [116, 198, 157],
-        [149, 213, 178],
-        [183, 228, 199],
-        [216, 243, 219]
+        [43, 30, 61],
+        [84, 39, 136],
+        [143, 49, 168],
+        [200, 69, 124],
+        [242, 109, 74],
+        [254, 187, 79]
       ]
     })
   ];
@@ -124,8 +135,11 @@ export default function Analytics() {
         <div className="grid-7-5 mb-6">
           <div className="card">
             <div className="card-head">
-              <div className="card-label"><IconMap size={13} /> 3D Density Map (Deck.gl + Carto)</div>
-              <div className="badge badge-green">3D Projection Live</div>
+              <div className="card-label">
+                <IconMap size={13} />
+                2D Intensity Heatmap (Deck.gl + Carto)
+              </div>
+              <div className="badge badge-blue">2D Intensity Live</div>
             </div>
             <div style={{ padding: 0, position: 'relative', height: 400, overflow: 'hidden', borderRadius: '0 0 12px 12px' }}>
                 <DeckGL
@@ -134,10 +148,8 @@ export default function Analytics() {
                     layers={layers}
                     getTooltip={({ object }) => {
                         if (!object) return null;
-                        const pointCount = Array.isArray(object.points) ? object.points.length : 0;
-                        return pointCount > 0
-                            ? `Density: ${pointCount} Districts in bin`
-                            : 'Density bin';
+                        if (object.position) return 'Intensity heat zone';
+                        return 'Intensity heat zone';
                     }}
                 >
                     <Map 
@@ -147,10 +159,10 @@ export default function Analytics() {
               <div className="map-overlay-legend" style={{ zIndex: 10 }}>
                 <div className="text-3 mb-2" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legend</div>
                 <div className="flex items-center gap-2 mb-1">
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#40916c' }} />
-                  <span style={{ fontSize: 11 }}>Density Zone</span>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f26d4a' }} />
+                  <span style={{ fontSize: 11 }}>Intensity Zone</span>
                 </div>
-                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Pitch to view 3D (Right-click + drag)</div>
+                <div className="text-3 mt-2" style={{ fontSize: 9 }}>Hotter color = higher activity</div>
               </div>
             </div>
           </div>

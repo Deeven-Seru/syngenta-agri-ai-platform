@@ -56,17 +56,18 @@ async def get_district_weather(district: str, lat: float = None, lon: float = No
             return {"error": f"Unknown district: {district}", "district": district}
         lat, lon = coords
 
-    url = (
-        f"https://my.meteoblue.com/packages/current"
-        f"?lat={lat}&lon={lon}"
-        f"&apikey={settings.meteoblue_api_key}"
-        f"&format=json"
-        f"&temperature=C"
-    )
+    url = "https://my.meteoblue.com/packages/current"
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "apikey": settings.meteoblue_api_key.strip(),
+        "format": "json",
+        "temperature": "C",
+    }
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as e:

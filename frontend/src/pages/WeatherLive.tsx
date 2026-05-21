@@ -70,6 +70,12 @@ export default function WeatherLive() {
   const districts = summary?.districts || {};
   const districtNames = Object.keys(districts).sort();
 
+  const formatTemp = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(1)}°` : 'N/A';
+
+  const formatHumidity = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? `${value}%` : 'N/A';
+
   return (
     <div className="page-enter">
       <div className="page-header">
@@ -129,24 +135,29 @@ export default function WeatherLive() {
             <tbody>
               {districtNames.map(name => {
                 const d = districts[name];
-                const timingClass = d.campaign_timing === 'urgent' ? 'badge-red' : 
-                                   d.campaign_timing === 'delay' ? 'badge-amber' : 'badge-green';
+                const timing = d?.campaign_timing ?? (d?.error ? 'unavailable' : 'optimal');
+                const timingClass = timing === 'urgent' ? 'badge-red' :
+                                   timing === 'delay' ? 'badge-amber' :
+                                   timing === 'unavailable' ? 'badge-muted' : 'badge-green';
+                const risks = Array.isArray(d?.risks) ? d.risks : [];
                 
                 return (
                   <tr key={name}>
                     <td style={{ fontWeight: 550 }}>{name}</td>
-                    <td className="font-mono text-2">{d.temperature_c.toFixed(1)}°</td>
-                    <td className="font-mono text-2">{d.humidity_pct}%</td>
+                    <td className="font-mono text-2">{formatTemp(d?.temperature_c)}</td>
+                    <td className="font-mono text-2">{formatHumidity(d?.humidity_pct)}</td>
                     <td>
                       <div className="flex gap-1 flex-wrap">
-                        {d.risks.length > 0 ? d.risks.map((r: string) => (
+                        {risks.length > 0 ? risks.map((r: string) => (
                           <span key={r} className="badge badge-muted" style={{ fontSize: '9px' }}>{r}</span>
-                        )) : <span className="text-3" style={{ fontSize: '11px' }}>No risks</span>}
+                        )) : d?.error ? (
+                          <span className="text-3" style={{ fontSize: '11px' }}>Weather unavailable</span>
+                        ) : <span className="text-3" style={{ fontSize: '11px' }}>No risks</span>}
                       </div>
                     </td>
                     <td>
                       <span className={`badge ${timingClass}`} style={{ textTransform: 'capitalize' }}>
-                        {d.campaign_timing}
+                        {timing}
                       </span>
                     </td>
                   </tr>
